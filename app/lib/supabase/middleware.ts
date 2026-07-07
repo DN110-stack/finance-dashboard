@@ -39,12 +39,25 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isPublicRoute = PUBLIC_ROUTES.has(pathname);
 
+  // A bare NextResponse.redirect(...) starts a brand-new response with no
+  // Set-Cookie headers. If getUser() just refreshed the session, that
+  // refreshed cookie only exists on `response` — redirecting without
+  // carrying it over would silently drop it, leaving the browser holding a
+  // stale/expired token on the next request.
+  function redirectTo(path: string) {
+    const redirectResponse = NextResponse.redirect(new URL(path, request.url));
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    return redirectResponse;
+  }
+
   if (!user && !isPublicRoute) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return redirectTo("/login");
   }
 
   if (user && isPublicRoute) {
-    return NextResponse.redirect(new URL("/", request.url));
+    return redirectTo("/");
   }
 
   return response;
