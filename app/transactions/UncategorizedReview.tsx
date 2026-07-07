@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2, Sparkles } from "lucide-react";
 import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
@@ -47,24 +47,40 @@ function initialSelections(
 export default function UncategorizedReview({
   transactions,
   suggestions = {},
+  suggestionsLoading = false,
   onClose,
 }: {
   transactions: Transaction[];
   suggestions?: Record<string, CategorySuggestion>;
+  suggestionsLoading?: boolean;
   onClose: () => void;
 }) {
   const { categories, addCategory } = useCategories();
   const { assignCategory } = useTransactions();
   const [pending, setPending] = useState(transactions);
-  const [{ selections: initialSel, newNames: initialNames }] = useState(() =>
-    initialSelections(transactions, suggestions, categories)
-  );
-  const [selections, setSelections] = useState<Record<string, string>>(initialSel);
-  const [newNames, setNewNames] = useState<Record<string, string>>(initialNames);
+  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [newNames, setNewNames] = useState<Record<string, string>>({});
   const [newColours, setNewColours] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Suggestions can arrive after this modal has already mounted (they're
+  // fetched in the background, batch by batch), so they're kept as a
+  // fallback derived at render time rather than copied into state — any
+  // field the user has actually edited (in `selections`/`newNames`) wins.
+  const suggested = useMemo(
+    () => initialSelections(pending, suggestions, categories),
+    [pending, suggestions, categories]
+  );
+
+  function selectionFor(id: string) {
+    return selections[id] ?? suggested.selections[id] ?? "";
+  }
+
+  function newNameFor(id: string) {
+    return newNames[id] ?? suggested.newNames[id] ?? "";
+  }
 
   useEffect(() => {
     if (pending.length === 0) onClose();
@@ -78,11 +94,11 @@ export default function UncategorizedReview({
     setBusyId(id);
 
     try {
-      const selection = selections[id];
+      const selection = selectionFor(id);
       let category: Category;
 
       if (!selection || selection === NEW_CATEGORY_VALUE) {
-        const name = (newNames[id] ?? "").trim();
+        const name = newNameFor(id).trim();
         if (!name) {
           throw new Error("Enter a name for the new category");
         }
@@ -120,12 +136,19 @@ export default function UncategorizedReview({
           </button>
         </div>
 
+        {suggestionsLoading && (
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Getting AI category suggestions…
+          </p>
+        )}
+
         {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
         <ul className="mt-4 flex flex-col gap-3">
           {pending.map((transaction) => {
             const id = transaction.id!;
-            const selection = selections[id] ?? "";
+            const selection = selectionFor(id);
             const hasSuggestion = !!suggestions[id] && !touched[id];
 
             return (
@@ -173,7 +196,7 @@ export default function UncategorizedReview({
                       <input
                         type="text"
                         placeholder="Category name"
-                        value={newNames[id] ?? ""}
+                        value={newNameFor(id)}
                         onChange={(event) => {
                           setNewNames((prev) => ({ ...prev, [id]: event.target.value }));
                           setTouched((prev) => ({ ...prev, [id]: true }));

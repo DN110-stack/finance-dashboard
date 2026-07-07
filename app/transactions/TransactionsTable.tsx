@@ -23,7 +23,7 @@ export default function TransactionsTable() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [detectedBank, setDetectedBank] = useState<BankFormat | null>(null);
   const [reviewQueue, setReviewQueue] = useState<Transaction[]>([]);
   const [reviewSuggestions, setReviewSuggestions] = useState<Record<string, CategorySuggestion>>(
@@ -137,22 +137,25 @@ export default function TransactionsTable() {
 
       const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
       if (uncategorized.length > 0) {
-        setIsSuggesting(true);
-        try {
-          const suggestions = await fetchCategorySuggestions(
-            uncategorized.map((t) => t.description),
-            categories.map((c) => c.name)
-          );
-          const suggestionsById: Record<string, CategorySuggestion> = {};
-          for (const suggestion of suggestions) {
-            const id = uncategorized[suggestion.index]?.id;
-            if (id) suggestionsById[id] = suggestion;
-          }
-          setReviewSuggestions(suggestionsById);
-        } finally {
-          setIsSuggesting(false);
-        }
+        // Open the review screen right away rather than waiting on the AI —
+        // suggestions fill in as they arrive, and the screen still works if
+        // they never do (network failure, timeout, etc).
+        setReviewSuggestions({});
         setReviewQueue(uncategorized);
+        setSuggestionsLoading(true);
+        fetchCategorySuggestions(
+          uncategorized.map((t) => t.description),
+          categories.map((c) => c.name)
+        )
+          .then((suggestions) => {
+            const suggestionsById: Record<string, CategorySuggestion> = {};
+            for (const suggestion of suggestions) {
+              const id = uncategorized[suggestion.index]?.id;
+              if (id) suggestionsById[id] = suggestion;
+            }
+            setReviewSuggestions(suggestionsById);
+          })
+          .finally(() => setSuggestionsLoading(false));
       }
     } catch (err) {
       setNotice(null);
@@ -202,16 +205,14 @@ export default function TransactionsTable() {
           <button
             type="button"
             onClick={handleUploadClick}
-            disabled={isUploading || isSuggesting || categoriesLoading}
+            disabled={isUploading || categoriesLoading}
             className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
-            {isSuggesting
-              ? "Getting AI suggestions…"
-              : isUploading
-                ? "Uploading…"
-                : categoriesLoading
-                  ? "Loading…"
-                  : "Upload CSV"}
+            {isUploading
+              ? "Uploading…"
+              : categoriesLoading
+                ? "Loading…"
+                : "Upload CSV"}
           </button>
         </div>
       </div>
@@ -309,6 +310,7 @@ export default function TransactionsTable() {
         <UncategorizedReview
           transactions={reviewQueue}
           suggestions={reviewSuggestions}
+          suggestionsLoading={suggestionsLoading}
           onClose={() => {
             setReviewQueue([]);
             setReviewSuggestions({});
