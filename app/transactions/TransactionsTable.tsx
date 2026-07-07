@@ -4,22 +4,20 @@ import { useRef, useState } from "react";
 import { useTransactions } from "../context/TransactionsContext";
 import { parseTransactionsCSV, type BankFormat, type Transaction } from "../lib/csv";
 import { UNCATEGORIZED } from "../lib/rules";
+import { BANK_BADGE_STYLES } from "../lib/banks";
 import CategoryCell from "./CategoryCell";
 import UncategorizedReview from "./UncategorizedReview";
+import UploadHistory from "./UploadHistory";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
 
-const BANK_BADGE_STYLES: Record<BankFormat, string> = {
-  NAB: "bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400",
-  Westpac: "bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
-};
-
 export default function TransactionsTable() {
   const { transactions, isLoading, addTransactions } = useTransactions();
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [detectedBank, setDetectedBank] = useState<BankFormat | null>(null);
   const [reviewQueue, setReviewQueue] = useState<Transaction[]>([]);
@@ -40,13 +38,20 @@ export default function TransactionsTable() {
       if (parsed.transactions.length === 0) {
         throw new Error("No transactions found in CSV");
       }
-      const inserted = await addTransactions(parsed.transactions, parsed.bank);
+      const { inserted, skippedCount } = await addTransactions(parsed.transactions, parsed.bank);
       setDetectedBank(parsed.bank);
       setError(null);
+      setNotice(
+        `Added ${inserted.length} new transaction${inserted.length === 1 ? "" : "s"}` +
+          (skippedCount > 0
+            ? ` — skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.`
+            : ".")
+      );
 
       const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
       if (uncategorized.length > 0) setReviewQueue(uncategorized);
     } catch (err) {
+      setNotice(null);
       setError(err instanceof Error ? err.message : "Failed to parse CSV");
     } finally {
       setIsUploading(false);
@@ -93,6 +98,9 @@ export default function TransactionsTable() {
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
+      {notice && !error && (
+        <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{notice}</p>
+      )}
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
         <table className="w-full min-w-[480px] text-left text-sm">
@@ -136,6 +144,8 @@ export default function TransactionsTable() {
           </tbody>
         </table>
       </div>
+
+      <UploadHistory />
 
       {reviewQueue.length > 0 && (
         <UncategorizedReview
