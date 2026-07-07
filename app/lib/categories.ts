@@ -1,4 +1,12 @@
-export const CATEGORY_COLORS: Record<string, { badge: string; hex: string }> = {
+export type CategoryColorInfo = {
+  // Tailwind classes for the stock category palette. Absent for custom
+  // (user-picked hex) or unrecognized categories — callers should fall back
+  // to an inline style using `hex` in that case.
+  badge?: string;
+  hex: string;
+};
+
+export const CATEGORY_COLORS: Record<string, CategoryColorInfo> = {
   Food: {
     badge: "bg-orange-100 text-orange-700 dark:bg-orange-500/10 dark:text-orange-400",
     hex: "#f97316",
@@ -25,11 +33,20 @@ export const CATEGORY_COLORS: Record<string, { badge: string; hex: string }> = {
   },
 };
 
-export const DEFAULT_CATEGORY_COLOR = {
-  badge: "bg-zinc-100 text-zinc-700 dark:bg-zinc-500/10 dark:text-zinc-400",
+export const DEFAULT_CATEGORY_COLOR: CategoryColorInfo = {
   hex: "#71717a",
 };
 
-export function getCategoryColor(category: string) {
+export function getCategoryColor(
+  category: string,
+  customCategories?: { name: string; colour: string }[]
+): CategoryColorInfo {
+  const custom = customCategories?.find(
+    (c) => c.name.toLowerCase() === category.toLowerCase()
+  );
+  if (custom) {
+    return { hex: custom.colour };
+  }
+
   return CATEGORY_COLORS[category] ?? DEFAULT_CATEGORY_COLOR;
 }

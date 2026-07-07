@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TransactionsProvider } from "./context/TransactionsContext";
+import { CategoriesProvider } from "./context/CategoriesContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,7 +44,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <TransactionsProvider>{children}</TransactionsProvider>
+        <CategoriesProvider>
+          <TransactionsProvider>{children}</TransactionsProvider>
+        </CategoriesProvider>
       </body>
     </html>
   );

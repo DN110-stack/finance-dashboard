@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { LayoutDashboard, Receipt, Target, Wallet } from "lucide-react";
+import { LayoutDashboard, Receipt, Tag, Target, Wallet } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
+import SignOutButton from "./SignOutButton";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Transactions", href: "/transactions", icon: Receipt },
+  { label: "Categories", href: "/categories", icon: Tag },
   { label: "Budget", href: "#", icon: Wallet },
   { label: "Goals", href: "#", icon: Target },
 ];
@@ -20,7 +22,10 @@ export default function AppShell({
     <div className="flex h-screen flex-col">
       <header className="flex h-14 items-center justify-between border-b border-black/10 px-4 sm:h-16 sm:px-6 dark:border-white/10">
         <span className="text-base font-semibold sm:text-lg">Finance Dashboard</span>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <SignOutButton />
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">

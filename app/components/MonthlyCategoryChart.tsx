@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useTransactions } from "../context/TransactionsContext";
+import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor } from "../lib/categories";
 
 function formatMonthLabel(monthKey: string) {
@@ -24,6 +25,7 @@ function formatMonthLabel(monthKey: string) {
 
 export default function MonthlyCategoryChart() {
   const { transactions } = useTransactions();
+  const { categories: userCategories } = useCategories();
 
   const { data, categories } = useMemo(() => {
     const monthTotals = new Map<string, Record<string, number>>();
@@ -68,7 +70,7 @@ export default function MonthlyCategoryChart() {
             key={category}
             dataKey={category}
             name={category}
-            fill={getCategoryColor(category).hex}
+            fill={getCategoryColor(category, userCategories).hex}
             radius={[3, 3, 0, 0]}
           />
         ))}

@@ -12,10 +12,12 @@ import {
   YAxis,
 } from "recharts";
 import { useTransactions } from "../context/TransactionsContext";
+import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor } from "../lib/categories";
 
 export default function SpendingChart() {
   const { transactions } = useTransactions();
+  const { categories } = useCategories();
 
   const data = useMemo(() => {
     const totals = new Map<string, number>();
@@ -43,7 +45,7 @@ export default function SpendingChart() {
         <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
         <Bar dataKey="total" name="Spending" radius={[4, 4, 0, 0]}>
           {data.map((entry) => (
-            <Cell key={entry.category} fill={getCategoryColor(entry.category).hex} />
+            <Cell key={entry.category} fill={getCategoryColor(entry.category, categories).hex} />
           ))}
         </Bar>
       </BarChart>

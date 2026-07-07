@@ -3,7 +3,9 @@
 import { useRef, useState } from "react";
 import CategoryBadge from "../components/CategoryBadge";
 import { useTransactions } from "../context/TransactionsContext";
-import { parseTransactionsCSV, type BankFormat } from "../lib/csv";
+import { parseTransactionsCSV, type BankFormat, type Transaction } from "../lib/csv";
+import { UNCATEGORIZED } from "../lib/rules";
+import UncategorizedReview from "./UncategorizedReview";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -16,9 +18,11 @@ const BANK_BADGE_STYLES: Record<BankFormat, string> = {
 };
 
 export default function TransactionsTable() {
-  const { transactions, setTransactions } = useTransactions();
+  const { transactions, isLoading, addTransactions } = useTransactions();
   const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [detectedBank, setDetectedBank] = useState<BankFormat | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<Transaction[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleUploadClick() {
@@ -29,18 +33,23 @@ export default function TransactionsTable() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsUploading(true);
     try {
       const text = await file.text();
       const parsed = parseTransactionsCSV(text);
       if (parsed.transactions.length === 0) {
         throw new Error("No transactions found in CSV");
       }
-      setTransactions(parsed.transactions);
+      const inserted = await addTransactions(parsed.transactions, parsed.bank);
       setDetectedBank(parsed.bank);
       setError(null);
+
+      const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
+      if (uncategorized.length > 0) setReviewQueue(uncategorized);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to parse CSV");
     } finally {
+      setIsUploading(false);
       event.target.value = "";
     }
   }
@@ -50,7 +59,9 @@ export default function TransactionsTable() {
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            {transactions.length} transaction{transactions.length === 1 ? "" : "s"}
+            {isLoading
+              ? "Loading transactions…"
+              : `${transactions.length} transaction${transactions.length === 1 ? "" : "s"}`}
           </p>
           {detectedBank && (
             <span
@@ -71,9 +82,10 @@ export default function TransactionsTable() {
           <button
             type="button"
             onClick={handleUploadClick}
-            className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            disabled={isUploading}
+            className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
-            Upload CSV
+            {isUploading ? "Uploading…" : "Upload CSV"}
           </button>
         </div>
       </div>
@@ -94,7 +106,14 @@ export default function TransactionsTable() {
           </thead>
           <tbody className="divide-y divide-black/10 dark:divide-white/10">
             {transactions.map((transaction, index) => (
-              <tr key={`${transaction.date}-${transaction.description}-${index}`}>
+              <tr
+                key={`${transaction.date}-${transaction.description}-${index}`}
+                className={
+                  transaction.category === UNCATEGORIZED
+                    ? "bg-amber-50 dark:bg-amber-500/10"
+                    : undefined
+                }
+              >
                 <td className="px-4 py-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
                   {transaction.date}
                 </td>
@@ -117,6 +136,13 @@ export default function TransactionsTable() {
           </tbody>
         </table>
       </div>
+
+      {reviewQueue.length > 0 && (
+        <UncategorizedReview
+          transactions={reviewQueue}
+          onClose={() => setReviewQueue([])}
+        />
+      )}
     </>
   );
 }
