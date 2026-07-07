@@ -1,10 +1,10 @@
 "use client";
 
 import { useRef, useState } from "react";
-import CategoryBadge from "../components/CategoryBadge";
 import { useTransactions } from "../context/TransactionsContext";
 import { parseTransactionsCSV, type BankFormat, type Transaction } from "../lib/csv";
 import { UNCATEGORIZED } from "../lib/rules";
+import CategoryCell from "./CategoryCell";
 import UncategorizedReview from "./UncategorizedReview";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -119,7 +119,7 @@ export default function TransactionsTable() {
                 </td>
                 <td className="px-4 py-3 font-medium">{transaction.description}</td>
                 <td className="px-4 py-3">
-                  <CategoryBadge category={transaction.category} />
+                  <CategoryCell transaction={transaction} />
                 </td>
                 <td
                   className={`px-4 py-3 text-right font-medium whitespace-nowrap ${

@@ -117,6 +117,8 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       throw new Error("This transaction can't be updated");
     }
 
+    if (transaction.category === category.name) return;
+
     const supabase = createClient();
     const {
       data: { user },
@@ -133,13 +135,34 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
     if (updateError) throw new Error(updateError.message);
 
-    const { error: ruleError } = await supabase.from("transaction_rules").insert({
-      user_id: user.id,
-      keyword: extractKeyword(transaction.description),
-      category_id: category.id,
-    });
+    // Upsert the rule by keyword so repeatedly re-categorizing the same
+    // merchant updates the existing rule instead of piling up duplicates.
+    const keyword = extractKeyword(transaction.description);
+    const { data: existingRules, error: findError } = await supabase
+      .from("transaction_rules")
+      .select("id")
+      .eq("user_id", user.id)
+      .ilike("keyword", keyword)
+      .limit(1);
 
-    if (ruleError) throw new Error(ruleError.message);
+    if (findError) throw new Error(findError.message);
+
+    if (existingRules && existingRules.length > 0) {
+      const { error: updateRuleError } = await supabase
+        .from("transaction_rules")
+        .update({ category_id: category.id })
+        .eq("id", existingRules[0].id);
+
+      if (updateRuleError) throw new Error(updateRuleError.message);
+    } else {
+      const { error: insertRuleError } = await supabase.from("transaction_rules").insert({
+        user_id: user.id,
+        keyword,
+        category_id: category.id,
+      });
+
+      if (insertRuleError) throw new Error(insertRuleError.message);
+    }
 
     setTransactions((prev) =>
       prev.map((t) => (t.id === transaction.id ? { ...t, category: category.name } : t))
