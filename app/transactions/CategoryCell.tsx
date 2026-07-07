@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { useCategories } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
+import { distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
 
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_CATEGORY_VALUE = "__new__";
+const NEW_PARENT_VALUE = "__new_parent__";
 
 export default function CategoryCell({ transaction }: { transaction: Transaction }) {
   const { categories, addCategory } = useCategories();
@@ -15,9 +17,14 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColour, setNewColour] = useState(DEFAULT_COLOUR);
+  const [parentSelection, setParentSelection] = useState<string>(UNGROUPED);
+  const [newParentName, setNewParentName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+  const parentOptions = useMemo(() => distinctParents(categories), [categories]);
 
   const currentCategory = categories.find(
     (c) => c.name.toLowerCase() === transaction.category.toLowerCase()
@@ -56,14 +63,23 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
     event.preventDefault();
     if (!newName.trim()) return;
 
+    const parentCategory =
+      parentSelection === UNGROUPED
+        ? null
+        : parentSelection === NEW_PARENT_VALUE
+          ? newParentName.trim() || null
+          : parentSelection;
+
     setError(null);
     setIsSaving(true);
     try {
-      const category = await addCategory(newName.trim(), newColour);
+      const category = await addCategory(newName.trim(), newColour, parentCategory);
       await assignCategory(transaction, category);
       setIsCreating(false);
       setNewName("");
       setNewColour(DEFAULT_COLOUR);
+      setParentSelection(UNGROUPED);
+      setNewParentName("");
       flashSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create category");
@@ -86,10 +102,14 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
               {transaction.category}
             </option>
           )}
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
+          {groups.map((group) => (
+            <optgroup key={group.parent} label={group.parent}>
+              {group.categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </optgroup>
           ))}
           <option value={NEW_CATEGORY_VALUE}>+ Create new category</option>
         </select>
@@ -102,7 +122,7 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
       {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
 
       {isCreating && (
-        <form onSubmit={handleCreateAndAssign} className="flex items-center gap-2">
+        <form onSubmit={handleCreateAndAssign} className="flex flex-wrap items-center gap-2">
           <input
             type="text"
             autoFocus
@@ -111,6 +131,28 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
             onChange={(event) => setNewName(event.target.value)}
             className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 dark:border-white/10"
           />
+          <select
+            value={parentSelection}
+            onChange={(event) => setParentSelection(event.target.value)}
+            className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+          >
+            <option value={UNGROUPED}>Ungrouped</option>
+            {parentOptions.map((parent) => (
+              <option key={parent} value={parent}>
+                {parent}
+              </option>
+            ))}
+            <option value={NEW_PARENT_VALUE}>+ New parent</option>
+          </select>
+          {parentSelection === NEW_PARENT_VALUE && (
+            <input
+              type="text"
+              placeholder="Parent name"
+              value={newParentName}
+              onChange={(event) => setNewParentName(event.target.value)}
+              className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+            />
+          )}
           <input
             type="color"
             value={newColour}

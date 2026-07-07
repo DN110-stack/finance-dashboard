@@ -7,12 +7,13 @@ export type Category = {
   id: string;
   name: string;
   colour: string;
+  parentCategory: string | null;
 };
 
 type CategoriesContextValue = {
   categories: Category[];
   isLoading: boolean;
-  addCategory: (name: string, colour: string) => Promise<Category>;
+  addCategory: (name: string, colour: string, parentCategory?: string | null) => Promise<Category>;
   deleteCategory: (id: string) => Promise<void>;
 };
 
@@ -42,14 +43,21 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, colour")
+        .select("id, name, colour, parent_category")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
       if (cancelled) return;
 
       if (!error && data) {
-        setCategories(data);
+        setCategories(
+          data.map((row) => ({
+            id: row.id,
+            name: row.name,
+            colour: row.colour,
+            parentCategory: row.parent_category,
+          }))
+        );
       }
       setIsLoading(false);
     }
@@ -65,7 +73,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
-  async function addCategory(name: string, colour: string) {
+  async function addCategory(name: string, colour: string, parentCategory: string | null = null) {
     const supabase = createClient();
     const {
       data: { user },
@@ -77,14 +85,21 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
     const { data, error } = await supabase
       .from("categories")
-      .insert({ user_id: user.id, name, colour })
-      .select("id, name, colour")
+      .insert({ user_id: user.id, name, colour, parent_category: parentCategory })
+      .select("id, name, colour, parent_category")
       .single();
 
     if (error) throw new Error(error.message);
 
-    setCategories((prev) => sortByName([...prev, data]));
-    return data;
+    const category: Category = {
+      id: data.id,
+      name: data.name,
+      colour: data.colour,
+      parentCategory: data.parent_category,
+    };
+
+    setCategories((prev) => sortByName([...prev, category]));
+    return category;
   }
 
   async function deleteCategory(id: string) {

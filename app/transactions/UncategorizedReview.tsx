@@ -6,6 +6,7 @@ import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
 import type { CategorySuggestion } from "../lib/categorySuggestions";
+import { distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -14,6 +15,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_CATEGORY_VALUE = "__new__";
+const NEW_PARENT_VALUE = "__new_parent__";
 
 function initialSelections(
   transactions: Transaction[],
@@ -61,6 +63,8 @@ export default function UncategorizedReview({
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [newNames, setNewNames] = useState<Record<string, string>>({});
   const [newColours, setNewColours] = useState<Record<string, string>>({});
+  const [newParents, setNewParents] = useState<Record<string, string>>({});
+  const [newParentNames, setNewParentNames] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [acceptingAll, setAcceptingAll] = useState(false);
@@ -75,6 +79,9 @@ export default function UncategorizedReview({
     () => initialSelections(pending, suggestions, categories),
     [pending, suggestions, categories]
   );
+
+  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+  const parentOptions = useMemo(() => distinctParents(categories), [categories]);
 
   function selectionFor(id: string) {
     return selections[id] ?? suggested.selections[id] ?? "";
@@ -104,7 +111,14 @@ export default function UncategorizedReview({
         if (!name) {
           throw new Error("Enter a name for the new category");
         }
-        category = await addCategory(name, newColours[id] ?? DEFAULT_COLOUR);
+        const parentSelection = newParents[id] ?? UNGROUPED;
+        const parentCategory =
+          parentSelection === UNGROUPED
+            ? null
+            : parentSelection === NEW_PARENT_VALUE
+              ? (newParentNames[id] ?? "").trim() || null
+              : parentSelection;
+        category = await addCategory(name, newColours[id] ?? DEFAULT_COLOUR, parentCategory);
       } else {
         const found = categories.find((c) => c.id === selection);
         if (!found) throw new Error("Choose a category first");
@@ -233,10 +247,14 @@ export default function UncategorizedReview({
                     <option value="" disabled>
                       Choose category…
                     </option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
+                    {groups.map((group) => (
+                      <optgroup key={group.parent} label={group.parent}>
+                        {group.categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                     <option value={NEW_CATEGORY_VALUE}>+ New category</option>
                   </select>
@@ -263,6 +281,33 @@ export default function UncategorizedReview({
                         }}
                         className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
                       />
+                      <select
+                        value={newParents[id] ?? UNGROUPED}
+                        onChange={(event) => {
+                          setNewParents((prev) => ({ ...prev, [id]: event.target.value }));
+                          setTouched((prev) => ({ ...prev, [id]: true }));
+                        }}
+                        className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                      >
+                        <option value={UNGROUPED}>Ungrouped</option>
+                        {parentOptions.map((parent) => (
+                          <option key={parent} value={parent}>
+                            {parent}
+                          </option>
+                        ))}
+                        <option value={NEW_PARENT_VALUE}>+ New parent</option>
+                      </select>
+                      {(newParents[id] ?? UNGROUPED) === NEW_PARENT_VALUE && (
+                        <input
+                          type="text"
+                          placeholder="Parent name"
+                          value={newParentNames[id] ?? ""}
+                          onChange={(event) =>
+                            setNewParentNames((prev) => ({ ...prev, [id]: event.target.value }))
+                          }
+                          className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                        />
+                      )}
                       <input
                         type="color"
                         value={newColours[id] ?? DEFAULT_COLOUR}

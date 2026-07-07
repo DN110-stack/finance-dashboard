@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
-import { getCategoryColor } from "../lib/categories";
+import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
 
 function formatMonthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
@@ -35,14 +35,15 @@ export default function MonthlyCategoryChart() {
       if (transaction.amount >= 0) continue;
 
       const monthKey = transaction.date.slice(0, 7);
-      categorySet.add(transaction.category);
+      const group = resolveGroupName(transaction.category, userCategories);
+      categorySet.add(group);
 
       const totals = monthTotals.get(monthKey) ?? {};
-      totals[transaction.category] = (totals[transaction.category] ?? 0) + Math.abs(transaction.amount);
+      totals[group] = (totals[group] ?? 0) + Math.abs(transaction.amount);
       monthTotals.set(monthKey, totals);
     }
 
-    const categories = Array.from(categorySet).sort();
+    const categories = orderByParentPriority(categorySet);
 
     const data = Array.from(monthTotals.entries())
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -55,7 +56,7 @@ export default function MonthlyCategoryChart() {
       });
 
     return { data, categories };
-  }, [transactions]);
+  }, [transactions, userCategories]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">

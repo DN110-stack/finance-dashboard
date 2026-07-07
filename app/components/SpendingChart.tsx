@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
-import { getCategoryColor } from "../lib/categories";
+import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
 
 export default function SpendingChart() {
   const { transactions } = useTransactions();
@@ -24,17 +24,16 @@ export default function SpendingChart() {
 
     for (const transaction of transactions) {
       if (transaction.amount >= 0) continue;
-      totals.set(
-        transaction.category,
-        (totals.get(transaction.category) ?? 0) + Math.abs(transaction.amount)
-      );
+      const group = resolveGroupName(transaction.category, categories);
+      totals.set(group, (totals.get(group) ?? 0) + Math.abs(transaction.amount));
     }
 
-    return Array.from(totals, ([category, total]) => ({
+    const order = orderByParentPriority(totals.keys());
+    return order.map((category) => ({
       category,
-      total: Math.round(total * 100) / 100,
-    })).sort((a, b) => b.total - a.total);
-  }, [transactions]);
+      total: Math.round((totals.get(category) ?? 0) * 100) / 100,
+    }));
+  }, [transactions, categories]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">
