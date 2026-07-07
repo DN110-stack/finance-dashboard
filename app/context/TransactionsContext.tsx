@@ -117,7 +117,11 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       if (!cancelled) setIsLoading(false);
     }
 
-    load();
+    // A hard navigation/reload while this is in flight aborts the underlying
+    // fetch; without a rejection handler that surfaces as an unhandled
+    // promise rejection in the console even though `cancelled` already
+    // guards against any resulting state update.
+    load().catch(() => {});
 
     return () => {
       cancelled = true;

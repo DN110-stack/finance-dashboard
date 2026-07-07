@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
+import type { CategorySuggestion } from "../lib/categorySuggestions";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -13,19 +15,54 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_CATEGORY_VALUE = "__new__";
 
+function initialSelections(
+  transactions: Transaction[],
+  suggestions: Record<string, CategorySuggestion>,
+  categories: Category[]
+) {
+  const selections: Record<string, string> = {};
+  const newNames: Record<string, string> = {};
+
+  for (const transaction of transactions) {
+    const id = transaction.id;
+    if (!id) continue;
+
+    const suggestion = suggestions[id];
+    if (!suggestion) continue;
+
+    if (suggestion.isNewCategory) {
+      selections[id] = NEW_CATEGORY_VALUE;
+      newNames[id] = suggestion.category;
+    } else {
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === suggestion.category.toLowerCase()
+      );
+      if (match) selections[id] = match.id;
+    }
+  }
+
+  return { selections, newNames };
+}
+
 export default function UncategorizedReview({
   transactions,
+  suggestions = {},
   onClose,
 }: {
   transactions: Transaction[];
+  suggestions?: Record<string, CategorySuggestion>;
   onClose: () => void;
 }) {
   const { categories, addCategory } = useCategories();
   const { assignCategory } = useTransactions();
   const [pending, setPending] = useState(transactions);
-  const [selections, setSelections] = useState<Record<string, string>>({});
-  const [newNames, setNewNames] = useState<Record<string, string>>({});
+  const [{ selections: initialSel, newNames: initialNames }] = useState(() =>
+    initialSelections(transactions, suggestions, categories)
+  );
+  const [selections, setSelections] = useState<Record<string, string>>(initialSel);
+  const [newNames, setNewNames] = useState<Record<string, string>>(initialNames);
   const [newColours, setNewColours] = useState<Record<string, string>>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +126,7 @@ export default function UncategorizedReview({
           {pending.map((transaction) => {
             const id = transaction.id!;
             const selection = selections[id] ?? "";
+            const hasSuggestion = !!suggestions[id] && !touched[id];
 
             return (
               <li
@@ -103,9 +141,10 @@ export default function UncategorizedReview({
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <select
                     value={selection}
-                    onChange={(event) =>
-                      setSelections((prev) => ({ ...prev, [id]: event.target.value }))
-                    }
+                    onChange={(event) => {
+                      setSelections((prev) => ({ ...prev, [id]: event.target.value }));
+                      setTouched((prev) => ({ ...prev, [id]: true }));
+                    }}
                     className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
                   >
                     <option value="" disabled>
@@ -119,15 +158,26 @@ export default function UncategorizedReview({
                     <option value={NEW_CATEGORY_VALUE}>+ New category</option>
                   </select>
 
+                  {hasSuggestion && (
+                    <span
+                      className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400"
+                      title="Suggested by AI based on this description"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Suggested
+                    </span>
+                  )}
+
                   {selection === NEW_CATEGORY_VALUE && (
                     <>
                       <input
                         type="text"
                         placeholder="Category name"
                         value={newNames[id] ?? ""}
-                        onChange={(event) =>
-                          setNewNames((prev) => ({ ...prev, [id]: event.target.value }))
-                        }
+                        onChange={(event) => {
+                          setNewNames((prev) => ({ ...prev, [id]: event.target.value }));
+                          setTouched((prev) => ({ ...prev, [id]: true }));
+                        }}
                         className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
                       />
                       <input

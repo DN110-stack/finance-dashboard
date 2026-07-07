@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
+import { useCategories } from "../context/CategoriesContext";
 import { parseTransactionsCSV, type BankFormat, type Transaction } from "../lib/csv";
 import { UNCATEGORIZED } from "../lib/rules";
 import { BANK_BADGE_STYLES } from "../lib/banks";
+import { fetchCategorySuggestions, type CategorySuggestion } from "../lib/categorySuggestions";
 import CategoryCell from "./CategoryCell";
 import UncategorizedReview from "./UncategorizedReview";
 import UploadHistory from "./UploadHistory";
@@ -17,11 +19,16 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 
 export default function TransactionsTable() {
   const { transactions, isLoading, addTransactions, deleteTransactions } = useTransactions();
+  const { categories, isLoading: categoriesLoading } = useCategories();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
   const [detectedBank, setDetectedBank] = useState<BankFormat | null>(null);
   const [reviewQueue, setReviewQueue] = useState<Transaction[]>([]);
+  const [reviewSuggestions, setReviewSuggestions] = useState<Record<string, CategorySuggestion>>(
+    {}
+  );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -129,7 +136,24 @@ export default function TransactionsTable() {
       );
 
       const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
-      if (uncategorized.length > 0) setReviewQueue(uncategorized);
+      if (uncategorized.length > 0) {
+        setIsSuggesting(true);
+        try {
+          const suggestions = await fetchCategorySuggestions(
+            uncategorized.map((t) => t.description),
+            categories.map((c) => c.name)
+          );
+          const suggestionsById: Record<string, CategorySuggestion> = {};
+          for (const suggestion of suggestions) {
+            const id = uncategorized[suggestion.index]?.id;
+            if (id) suggestionsById[id] = suggestion;
+          }
+          setReviewSuggestions(suggestionsById);
+        } finally {
+          setIsSuggesting(false);
+        }
+        setReviewQueue(uncategorized);
+      }
     } catch (err) {
       setNotice(null);
       setError(err instanceof Error ? err.message : "Failed to parse CSV");
@@ -178,10 +202,16 @@ export default function TransactionsTable() {
           <button
             type="button"
             onClick={handleUploadClick}
-            disabled={isUploading}
+            disabled={isUploading || isSuggesting || categoriesLoading}
             className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
-            {isUploading ? "Uploading…" : "Upload CSV"}
+            {isSuggesting
+              ? "Getting AI suggestions…"
+              : isUploading
+                ? "Uploading…"
+                : categoriesLoading
+                  ? "Loading…"
+                  : "Upload CSV"}
           </button>
         </div>
       </div>
@@ -278,7 +308,11 @@ export default function TransactionsTable() {
       {reviewQueue.length > 0 && (
         <UncategorizedReview
           transactions={reviewQueue}
-          onClose={() => setReviewQueue([])}
+          suggestions={reviewSuggestions}
+          onClose={() => {
+            setReviewQueue([]);
+            setReviewSuggestions({});
+          }}
         />
       )}
     </>
