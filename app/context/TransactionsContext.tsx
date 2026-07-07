@@ -47,11 +47,24 @@ function duplicateKey(t: { date: string; description: string; amount: number }) 
 }
 
 async function fetchTransactions(supabase: SupabaseClient, userId: string) {
-  const { data, error } = await supabase
+  console.log(
+    "[TransactionsContext] querying transactions: from('transactions').select('id, date, description, category, amount').eq('user_id', %s).order('date', { ascending: true })",
+    userId
+  );
+
+  const { data, error, status, statusText } = await supabase
     .from("transactions")
     .select("id, date, description, category, amount")
     .eq("user_id", userId)
     .order("date", { ascending: true });
+
+  console.log("[TransactionsContext] transactions response:", {
+    status,
+    statusText,
+    error,
+    rowCount: data?.length ?? 0,
+    data,
+  });
 
   if (error) throw new Error(error.message);
 
@@ -94,7 +107,14 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     async function load() {
       const {
         data: { user },
+        error: userError,
       } = await supabase.auth.getUser();
+
+      console.log("[TransactionsContext] current user after login:", {
+        userId: user?.id ?? null,
+        email: user?.email ?? null,
+        userError,
+      });
 
       if (!user) {
         if (!cancelled) setIsLoading(false);
@@ -106,14 +126,16 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       try {
         const loadedTransactions = await fetchTransactions(supabase, user.id);
         if (!cancelled) setTransactions(loadedTransactions);
-      } catch {
+      } catch (err) {
+        console.error("[TransactionsContext] failed to load transactions:", err);
         // Leave transactions empty rather than crash.
       }
 
       try {
         const loadedBatches = await fetchBatches(supabase, user.id);
         if (!cancelled) setBatches(loadedBatches);
-      } catch {
+      } catch (err) {
+        console.error("[TransactionsContext] failed to load batches:", err);
         // Leave batches empty rather than crash.
       }
 
