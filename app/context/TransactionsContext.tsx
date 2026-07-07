@@ -30,6 +30,7 @@ type TransactionsContextValue = {
   ) => Promise<AddTransactionsResult>;
   assignCategory: (transaction: Transaction, category: Category) => Promise<void>;
   deleteBatch: (batchId: string) => Promise<void>;
+  deleteTransactions: (transactionIds: string[]) => Promise<void>;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -303,9 +304,71 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     setBatches((prev) => prev.filter((batch) => batch.id !== batchId));
   }
 
+  async function deleteTransactions(transactionIds: string[]) {
+    if (transactionIds.length === 0) return;
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("You must be logged in to delete transactions");
+    }
+
+    const { data: deletedRows, error } = await supabase
+      .from("transactions")
+      .delete()
+      .in("id", transactionIds)
+      .eq("user_id", user.id)
+      .select("batch_id");
+
+    if (error) throw new Error(error.message);
+
+    const deletedIdSet = new Set(transactionIds);
+    setTransactions((prev) => prev.filter((t) => !t.id || !deletedIdSet.has(t.id)));
+
+    // Recompute affected batches' transaction_count from what's actually left
+    // in the DB, rather than doing arithmetic subtraction — avoids drift if
+    // counts were ever out of sync.
+    const affectedBatchIds = Array.from(
+      new Set((deletedRows ?? []).map((row) => row.batch_id).filter((id): id is string => !!id))
+    );
+
+    if (affectedBatchIds.length > 0) {
+      for (const batchId of affectedBatchIds) {
+        const { count, error: countError } = await supabase
+          .from("transactions")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("batch_id", batchId);
+
+        if (countError) throw new Error(countError.message);
+
+        const { error: updateError } = await supabase
+          .from("upload_batches")
+          .update({ transaction_count: count ?? 0 })
+          .eq("id", batchId);
+
+        if (updateError) throw new Error(updateError.message);
+      }
+
+      const refreshedBatches = await fetchBatches(supabase, user.id);
+      setBatches(refreshedBatches);
+    }
+  }
+
   return (
     <TransactionsContext.Provider
-      value={{ transactions, batches, isLoading, addTransactions, assignCategory, deleteBatch }}
+      value={{
+        transactions,
+        batches,
+        isLoading,
+        addTransactions,
+        assignCategory,
+        deleteBatch,
+        deleteTransactions,
+      }}
     >
       {children}
     </TransactionsContext.Provider>
