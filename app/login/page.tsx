@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "../lib/supabase/client";
 
 type Mode = "sign-in" | "sign-up";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,27 +19,43 @@ export default function LoginPage() {
     setNotice(null);
     setIsSubmitting(true);
 
+    // Same createClient() factory (app/lib/supabase/client.ts) used by every
+    // other context/component in the app — one shared cookie-backed session,
+    // not a separate client instance here.
     const supabase = createClient();
     const { error } =
       mode === "sign-in"
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password });
 
-    setIsSubmitting(false);
-
     if (error) {
+      setIsSubmitting(false);
       setError(error.message);
       return;
     }
 
     if (mode === "sign-up") {
+      setIsSubmitting(false);
       setNotice("Account created. Check your email to confirm, then log in.");
       setMode("sign-in");
       return;
     }
 
-    router.push("/");
-    router.refresh();
+    // signInWithPassword() resolving without an error doesn't guarantee the
+    // session actually landed in cookies before we navigate — confirm it did.
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    console.log("[Login] session after sign-in:", {
+      hasSession: !!sessionData.session,
+      userId: sessionData.session?.user.id ?? null,
+      expiresAt: sessionData.session?.expires_at ?? null,
+      sessionError,
+    });
+
+    // A hard navigation instead of router.push()/router.refresh(): the next
+    // request for "/" is then a fresh top-level request that goes through
+    // proxy.ts with the just-set cookies already attached, rather than
+    // relying on the client router's cache picking up the new auth state.
+    window.location.href = "/";
   }
 
   return (
