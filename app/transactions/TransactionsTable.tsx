@@ -118,7 +118,7 @@ export default function TransactionsTable() {
                   {transaction.date}
                 </td>
                 <td className="px-4 py-3 font-medium">{transaction.description}</td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3 align-top">
                   <CategoryCell transaction={transaction} />
                 </td>
                 <td
