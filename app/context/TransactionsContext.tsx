@@ -29,6 +29,9 @@ type TransactionsContextValue = {
     sourceBank: BankFormat
   ) => Promise<AddTransactionsResult>;
   assignCategory: (transaction: Transaction, category: Category) => Promise<void>;
+  assignCategories: (
+    assignments: { transaction: Transaction; category: Category }[]
+  ) => Promise<void>;
   deleteBatch: (batchId: string) => Promise<void>;
   deleteTransactions: (transactionIds: string[]) => Promise<void>;
 };
@@ -287,6 +290,101 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     );
   }
 
+  // Bulk version of assignCategory — used to accept many AI suggestions at
+  // once without one round trip per transaction. Groups the work by target
+  // category/rule instead so cost scales with the number of distinct
+  // categories involved, not the number of transactions.
+  async function assignCategories(
+    assignments: { transaction: Transaction; category: Category }[]
+  ) {
+    const valid = assignments.filter(
+      (a) => a.transaction.id && a.transaction.category !== a.category.name
+    );
+    if (valid.length === 0) return;
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("You must be logged in to categorize transactions");
+    }
+
+    const idsByCategory = new Map<string, { name: string; ids: string[] }>();
+    for (const { transaction, category } of valid) {
+      const entry = idsByCategory.get(category.id);
+      if (entry) entry.ids.push(transaction.id!);
+      else idsByCategory.set(category.id, { name: category.name, ids: [transaction.id!] });
+    }
+
+    for (const { name, ids } of idsByCategory.values()) {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category: name })
+        .in("id", ids)
+        .eq("user_id", user.id);
+
+      if (error) throw new Error(error.message);
+    }
+
+    // Upsert one rule per unique keyword — if the same keyword shows up more
+    // than once, the last assignment for it wins, matching the sequential
+    // behaviour of assignCategory being called once per transaction.
+    const categoryByKeyword = new Map<string, Category>();
+    for (const { transaction, category } of valid) {
+      categoryByKeyword.set(extractKeyword(transaction.description), category);
+    }
+
+    const { data: existingRules, error: findError } = await supabase
+      .from("transaction_rules")
+      .select("id, keyword")
+      .eq("user_id", user.id);
+
+    if (findError) throw new Error(findError.message);
+
+    const existingRuleIdByKeyword = new Map(
+      (existingRules ?? []).map((rule) => [rule.keyword.toLowerCase(), rule.id])
+    );
+
+    const ruleIdsByCategoryId = new Map<string, string[]>();
+    const rulesToInsert: { user_id: string; keyword: string; category_id: string }[] = [];
+
+    for (const [keyword, category] of categoryByKeyword.entries()) {
+      const existingRuleId = existingRuleIdByKeyword.get(keyword.toLowerCase());
+      if (existingRuleId) {
+        const ids = ruleIdsByCategoryId.get(category.id) ?? [];
+        ids.push(existingRuleId);
+        ruleIdsByCategoryId.set(category.id, ids);
+      } else {
+        rulesToInsert.push({ user_id: user.id, keyword, category_id: category.id });
+      }
+    }
+
+    for (const [categoryId, ruleIds] of ruleIdsByCategoryId.entries()) {
+      const { error } = await supabase
+        .from("transaction_rules")
+        .update({ category_id: categoryId })
+        .in("id", ruleIds);
+
+      if (error) throw new Error(error.message);
+    }
+
+    if (rulesToInsert.length > 0) {
+      const { error } = await supabase.from("transaction_rules").insert(rulesToInsert);
+      if (error) throw new Error(error.message);
+    }
+
+    const categoryNameById = new Map(
+      valid.map(({ transaction, category }) => [transaction.id!, category.name])
+    );
+    setTransactions((prev) =>
+      prev.map((t) =>
+        t.id && categoryNameById.has(t.id) ? { ...t, category: categoryNameById.get(t.id)! } : t
+      )
+    );
+  }
+
   async function deleteBatch(batchId: string) {
     const supabase = createClient();
     const {
@@ -370,6 +468,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         isLoading,
         addTransactions,
         assignCategory,
+        assignCategories,
         deleteBatch,
         deleteTransactions,
       }}

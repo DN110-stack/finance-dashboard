@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Sparkles } from "lucide-react";
+import { CheckCheck, Loader2, Sparkles } from "lucide-react";
 import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
@@ -56,14 +56,16 @@ export default function UncategorizedReview({
   onClose: () => void;
 }) {
   const { categories, addCategory } = useCategories();
-  const { assignCategory } = useTransactions();
+  const { assignCategory, assignCategories } = useTransactions();
   const [pending, setPending] = useState(transactions);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [newNames, setNewNames] = useState<Record<string, string>>({});
   const [newColours, setNewColours] = useState<Record<string, string>>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [acceptingAll, setAcceptingAll] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const suggestionCount = Object.keys(suggestions).length;
 
   // Suggestions can arrive after this modal has already mounted (they're
   // fetched in the background, batch by batch), so they're kept as a
@@ -118,6 +120,50 @@ export default function UncategorizedReview({
     }
   }
 
+  async function handleAcceptAll() {
+    setError(null);
+    setAcceptingAll(true);
+
+    try {
+      // Resolve every loaded suggestion to a real Category, creating each
+      // distinct suggested-new-category once (never once per transaction).
+      const newCategoryCache = new Map<string, Category>();
+      const assignments: { transaction: Transaction; category: Category }[] = [];
+
+      for (const transaction of pending) {
+        const id = transaction.id;
+        if (!id) continue;
+
+        const suggestion = suggestions[id];
+        if (!suggestion) continue;
+
+        const key = suggestion.category.toLowerCase();
+        let category = categories.find((c) => c.name.toLowerCase() === key);
+
+        if (!category && suggestion.isNewCategory) {
+          category = newCategoryCache.get(key);
+          if (!category) {
+            category = await addCategory(suggestion.category, DEFAULT_COLOUR);
+            newCategoryCache.set(key, category);
+          }
+        }
+
+        if (category) assignments.push({ transaction, category });
+      }
+
+      if (assignments.length === 0) {
+        throw new Error("No AI suggestions to accept yet");
+      }
+
+      await assignCategories(assignments);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to accept suggestions");
+    } finally {
+      setAcceptingAll(false);
+    }
+  }
+
   if (pending.length === 0) return null;
 
   return (
@@ -127,13 +173,27 @@ export default function UncategorizedReview({
           <h2 className="text-lg font-semibold">
             Review {pending.length} uncategorised transaction{pending.length === 1 ? "" : "s"}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            {!suggestionsLoading && suggestionCount > 0 && (
+              <button
+                type="button"
+                onClick={handleAcceptAll}
+                disabled={acceptingAll || busyId !== null}
+                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              >
+                <CheckCheck className="h-4 w-4" />
+                {acceptingAll ? "Accepting…" : "Accept all suggestions"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={acceptingAll}
+              className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         {suggestionsLoading && (
@@ -217,7 +277,7 @@ export default function UncategorizedReview({
                   <button
                     type="button"
                     onClick={() => handleAssign(transaction)}
-                    disabled={busyId === id || !selection}
+                    disabled={busyId === id || !selection || acceptingAll}
                     className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                   >
                     {busyId === id ? "Saving…" : "Assign"}
