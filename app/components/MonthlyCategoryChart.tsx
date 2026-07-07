@@ -1,0 +1,78 @@
+"use client";
+
+import { useMemo } from "react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { useTransactions } from "../context/TransactionsContext";
+import { getCategoryColor } from "../lib/categories";
+
+function formatMonthLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
+export default function MonthlyCategoryChart() {
+  const { transactions } = useTransactions();
+
+  const { data, categories } = useMemo(() => {
+    const monthTotals = new Map<string, Record<string, number>>();
+    const categorySet = new Set<string>();
+
+    for (const transaction of transactions) {
+      if (transaction.amount >= 0) continue;
+
+      const monthKey = transaction.date.slice(0, 7);
+      categorySet.add(transaction.category);
+
+      const totals = monthTotals.get(monthKey) ?? {};
+      totals[transaction.category] = (totals[transaction.category] ?? 0) + Math.abs(transaction.amount);
+      monthTotals.set(monthKey, totals);
+    }
+
+    const categories = Array.from(categorySet).sort();
+
+    const data = Array.from(monthTotals.entries())
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([monthKey, totals]) => {
+        const row: Record<string, string | number> = { month: formatMonthLabel(monthKey) };
+        for (const category of categories) {
+          row[category] = Math.round((totals[category] ?? 0) * 100) / 100;
+        }
+        return row;
+      });
+
+    return { data, categories };
+  }, [transactions]);
+
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
+        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+        <YAxis tick={{ fontSize: 12 }} />
+        <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+        <Legend wrapperStyle={{ fontSize: 12 }} />
+        {categories.map((category) => (
+          <Bar
+            key={category}
+            dataKey={category}
+            name={category}
+            fill={getCategoryColor(category).hex}
+            radius={[3, 3, 0, 0]}
+          />
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
