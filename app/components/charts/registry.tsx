@@ -8,6 +8,7 @@ import SavingsRateTrendChart from "./SavingsRateTrendChart";
 import TopMerchantsChart from "./TopMerchantsChart";
 import CashFlowChart from "./CashFlowChart";
 import DailySpendingHeatmap from "./DailySpendingHeatmap";
+import BudgetVsActualChart from "./BudgetVsActualChart";
 
 export type ChartComponent = ComponentType<{ period: PeriodState }>;
 
@@ -49,5 +50,10 @@ export const CHART_DEFINITIONS: Record<
     label: "Daily Spending Heatmap",
     description: "A calendar view of each day's spending — darker means more was spent that day.",
     component: DailySpendingHeatmap,
+  },
+  budgetVsActual: {
+    label: "Budget vs Actual",
+    description: "Budgeted vs actual spending per category for the selected period.",
+    component: BudgetVsActualChart,
   },
 };

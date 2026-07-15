@@ -1,13 +1,12 @@
 import Link from "next/link";
-import { LayoutDashboard, Receipt, Tag, Target, Wallet } from "lucide-react";
+import { LayoutDashboard, Receipt, Target, Wallet } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import SignOutButton from "./SignOutButton";
 
 const navItems = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Transactions", href: "/transactions", icon: Receipt },
-  { label: "Categories", href: "/categories", icon: Tag },
-  { label: "Budget", href: "#", icon: Wallet },
+  { label: "Budget", href: "/budget", icon: Wallet },
   { label: "Goals", href: "#", icon: Target },
 ];
 

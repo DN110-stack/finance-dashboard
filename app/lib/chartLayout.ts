@@ -5,7 +5,8 @@ export type ChartType =
   | "savingsRateTrend"
   | "topMerchants"
   | "cashFlow"
-  | "dailyHeatmap";
+  | "dailyHeatmap"
+  | "budgetVsActual";
 
 export const ALL_CHART_TYPES: ChartType[] = [
   "spendingByCategory",
@@ -15,6 +16,7 @@ export const ALL_CHART_TYPES: ChartType[] = [
   "topMerchants",
   "cashFlow",
   "dailyHeatmap",
+  "budgetVsActual",
 ];
 
 export type ChartLayout = [ChartType, ChartType, ChartType, ChartType];

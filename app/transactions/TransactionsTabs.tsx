@@ -1,14 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import TransactionsTable from "./TransactionsTable";
 import UploadHistory from "./UploadHistory";
+import CategoriesManager from "./CategoriesManager";
 
-const TABS = ["Transactions", "Upload History"] as const;
+const TABS = ["Transactions", "Upload History", "Categories"] as const;
 type Tab = (typeof TABS)[number];
 
+// Only "?tab=categories" is a recognized deep link — anything else (including
+// no param at all) falls back to the default "Transactions" tab.
+function tabFromSearchParam(value: string | null): Tab {
+  return value === "categories" ? "Categories" : "Transactions";
+}
+
 export default function TransactionsTabs() {
-  const [activeTab, setActiveTab] = useState<Tab>("Transactions");
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>(() => tabFromSearchParam(searchParams.get("tab")));
 
   return (
     <>
@@ -29,7 +38,9 @@ export default function TransactionsTabs() {
         ))}
       </div>
 
-      {activeTab === "Transactions" ? <TransactionsTable /> : <UploadHistory />}
+      {activeTab === "Transactions" && <TransactionsTable />}
+      {activeTab === "Upload History" && <UploadHistory />}
+      {activeTab === "Categories" && <CategoriesManager />}
     </>
   );
 }

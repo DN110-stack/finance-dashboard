@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TransactionsProvider } from "./context/TransactionsContext";
 import { CategoriesProvider } from "./context/CategoriesContext";
+import { BudgetsProvider } from "./context/BudgetsContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,7 +46,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <CategoriesProvider>
-          <TransactionsProvider>{children}</TransactionsProvider>
+          <TransactionsProvider>
+            <BudgetsProvider>{children}</BudgetsProvider>
+          </TransactionsProvider>
         </CategoriesProvider>
       </body>
     </html>
