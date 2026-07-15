@@ -14,6 +14,7 @@ import {
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
+import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
 
 function formatMonthLabel(monthKey: string) {
   const [year, month] = monthKey.split("-").map(Number);
@@ -23,15 +24,16 @@ function formatMonthLabel(monthKey: string) {
   });
 }
 
-export default function MonthlyCategoryChart() {
+export default function MonthlyCategoryChart({ period }: { period: PeriodState }) {
   const { transactions } = useTransactions();
   const { categories: userCategories } = useCategories();
 
   const { data, categories } = useMemo(() => {
+    const periodTransactions = filterTransactionsByPeriod(transactions, period);
     const monthTotals = new Map<string, Record<string, number>>();
     const categorySet = new Set<string>();
 
-    for (const transaction of transactions) {
+    for (const transaction of periodTransactions) {
       if (transaction.amount >= 0 || transaction.isOneOff) continue;
 
       const monthKey = transaction.date.slice(0, 7);
@@ -56,7 +58,7 @@ export default function MonthlyCategoryChart() {
       });
 
     return { data, categories };
-  }, [transactions, userCategories]);
+  }, [transactions, userCategories, period]);
 
   return (
     <ResponsiveContainer width="100%" height="100%">

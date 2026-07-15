@@ -3,51 +3,42 @@
 import { useMemo } from "react";
 import { Landmark, PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
+import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
 });
 
-export default function SummaryCards() {
+export default function SummaryCards({ period }: { period: PeriodState }) {
   const { transactions } = useTransactions();
 
-  const { totalBalance, monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
+  const { savings, monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
     // One-off transactions are excluded from every dashboard calculation —
     // they're still visible/manageable on the Transactions page, just not
     // part of the recurring-spending picture shown here.
     const included = transactions.filter((t) => !t.isOneOff);
+    const periodTransactions = filterTransactionsByPeriod(included, period);
 
-    const totalBalance = included.reduce((sum, t) => sum + t.amount, 0);
-
-    const latestMonth = included.reduce<string | null>((latest, t) => {
-      const month = t.date.slice(0, 7);
-      return !latest || month > latest ? month : latest;
-    }, null);
-
-    const monthlyTransactions = latestMonth
-      ? included.filter((t) => t.date.slice(0, 7) === latestMonth)
-      : [];
-
-    const monthlyIncome = monthlyTransactions
+    const monthlyIncome = periodTransactions
       .filter((t) => t.amount > 0)
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const monthlyExpenses = monthlyTransactions
+    const monthlyExpenses = periodTransactions
       .filter((t) => t.amount < 0)
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-    const savingsRate = monthlyIncome > 0
-      ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100
-      : 0;
+    const savings = monthlyIncome - monthlyExpenses;
 
-    return { totalBalance, monthlyIncome, monthlyExpenses, savingsRate };
-  }, [transactions]);
+    const savingsRate = monthlyIncome > 0 ? (savings / monthlyIncome) * 100 : 0;
+
+    return { savings, monthlyIncome, monthlyExpenses, savingsRate };
+  }, [transactions, period]);
 
   const cards = [
     {
-      label: "Total Balance",
-      value: currencyFormatter.format(totalBalance),
+      label: "Savings",
+      value: currencyFormatter.format(savings),
       icon: Landmark,
       iconClass: "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
     },
