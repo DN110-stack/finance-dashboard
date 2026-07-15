@@ -64,7 +64,7 @@ export default function TransactionsTable() {
     filtersFromSearchParams(searchParams)
   );
   const [sortColumn, setSortColumn] = useState<SortColumn>("date");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [perPage, setPerPage] = useState<number>(50);
   const [page, setPage] = useState(1);
   const [pageInputValue, setPageInputValue] = useState("1");
