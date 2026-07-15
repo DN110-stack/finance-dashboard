@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { useCategories } from "../context/CategoriesContext";
-import { distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
+import { useCategories, type Category } from "../context/CategoriesContext";
+import { PARENT_CATEGORIES, distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
 
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_PARENT_VALUE = "__new_parent__";
@@ -19,7 +19,21 @@ export default function CategoriesManager() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const parentOptions = useMemo(() => distinctParents(categories), [categories]);
-  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+
+  // The 11 core categories are seeded for every user and shown as a fixed,
+  // read-only set; anything else is a category the user created themselves.
+  const coreCategories = useMemo(
+    () =>
+      PARENT_CATEGORIES.map((coreName) => categories.find((c) => c.name === coreName)).filter(
+        (c): c is Category => !!c
+      ),
+    [categories]
+  );
+  const customCategories = useMemo(
+    () => categories.filter((c) => !(PARENT_CATEGORIES as readonly string[]).includes(c.name)),
+    [categories]
+  );
+  const customGroups = useMemo(() => groupCategoriesByParent(customCategories), [customCategories]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -140,48 +154,81 @@ export default function CategoriesManager() {
 
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
 
-      <div className="flex flex-col gap-6">
-        {isLoading ? (
-          <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
-            Loading categories…
-          </p>
-        ) : categories.length === 0 ? (
-          <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
-            No categories yet. Add one above, or create one while reviewing uncategorised
-            transactions.
-          </p>
-        ) : (
-          groups.map((group) => (
-            <div key={group.parent} className="rounded-lg border border-black/10 dark:border-white/10">
-              <h3 className="border-b border-black/10 px-4 py-2 text-sm font-semibold dark:border-white/10">
-                {group.parent}
-              </h3>
-              <ul className="divide-y divide-black/10 dark:divide-white/10">
-                {group.categories.map((category) => (
-                  <li key={category.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className="h-3 w-3 shrink-0 rounded-full"
-                        style={{ backgroundColor: category.colour }}
-                      />
-                      <span className="text-sm font-medium">{category.name}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(category.id)}
-                      disabled={deletingId === category.id}
-                      aria-label={`Delete ${category.name}`}
-                      className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </li>
+      {isLoading ? (
+        <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+          Loading categories…
+        </p>
+      ) : categories.length === 0 ? (
+        <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+          No categories yet. Add one above, or create one while reviewing uncategorised
+          transactions.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-8">
+          <div>
+            <h2 className="mb-3 text-lg font-semibold">Core Categories</h2>
+            <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
+              {coreCategories.map((category) => (
+                <li key={category.id} className="flex items-center gap-3 px-4 py-3">
+                  <span
+                    className="h-3 w-3 shrink-0 rounded-full"
+                    style={{ backgroundColor: category.colour }}
+                  />
+                  <span className="text-sm font-medium">{category.name}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h2 className="mb-3 text-lg font-semibold">Custom Categories</h2>
+            {customCategories.length === 0 ? (
+              <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+                No custom categories yet. Add one above, or create one while reviewing
+                uncategorised transactions.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {customGroups.map((group) => (
+                  <div
+                    key={group.parent}
+                    className="rounded-lg border border-black/10 dark:border-white/10"
+                  >
+                    <h3 className="border-b border-black/10 px-4 py-2 text-sm font-semibold dark:border-white/10">
+                      {group.parent}
+                    </h3>
+                    <ul className="divide-y divide-black/10 dark:divide-white/10">
+                      {group.categories.map((category) => (
+                        <li
+                          key={category.id}
+                          className="flex items-center justify-between px-4 py-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-full"
+                              style={{ backgroundColor: category.colour }}
+                            />
+                            <span className="text-sm font-medium">{category.name}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(category.id)}
+                            disabled={deletingId === category.id}
+                            aria-label={`Delete ${category.name}`}
+                            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          ))
-        )}
-      </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

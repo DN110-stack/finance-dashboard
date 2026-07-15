@@ -83,9 +83,18 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
       throw new Error("You must be logged in to create a category");
     }
 
+    const trimmedName = name.trim();
+
+    // Never create a second category that only differs by case — hand back
+    // the existing one instead so callers can still assign it.
+    const existing = categories.find(
+      (category) => category.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (existing) return existing;
+
     const { data, error } = await supabase
       .from("categories")
-      .insert({ user_id: user.id, name, colour, parent_category: parentCategory })
+      .insert({ user_id: user.id, name: trimmedName, colour, parent_category: parentCategory })
       .select("id, name, colour, parent_category")
       .single();
 

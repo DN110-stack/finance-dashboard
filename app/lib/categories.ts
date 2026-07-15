@@ -26,19 +26,19 @@ export const PARENT_CATEGORIES = [
 // Validated (dataviz skill categorical-palette checks, light + dark surfaces)
 // hex per parent category, in the same fixed order as PARENT_CATEGORIES.
 export const CATEGORY_COLORS: Record<string, CategoryColorInfo> = {
-  Income: { hex: "#16a34a" },
+  Income: { hex: "#22c55e" },
   Housing: { hex: "#3b82f6" },
-  Food: { hex: "#ea580c" },
-  Transport: { hex: "#059669" },
-  Health: { hex: "#ef4444" },
-  Finance: { hex: "#d97706" },
-  Shopping: { hex: "#ec4899" },
-  Entertainment: { hex: "#8b5cf6" },
-  "Personal Care": { hex: "#c026d3" },
-  Savings: { hex: "#0d9488" },
+  Food: { hex: "#f97316" },
+  Transport: { hex: "#8b5cf6" },
+  Health: { hex: "#ec4899" },
+  Finance: { hex: "#ef4444" },
+  Shopping: { hex: "#f59e0b" },
+  Entertainment: { hex: "#06b6d4" },
+  "Personal Care": { hex: "#d946ef" },
+  Savings: { hex: "#14b8a6" },
   // Deliberately a low-chroma neutral — "Other" is a genuine catch-all
   // bucket, same rationale as DEFAULT_CATEGORY_COLOR below.
-  Other: { hex: "#64748b" },
+  Other: { hex: "#94a3b8" },
 };
 
 export const DEFAULT_CATEGORY_COLOR: CategoryColorInfo = {

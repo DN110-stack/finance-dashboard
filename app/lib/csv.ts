@@ -1,12 +1,14 @@
+export type BankFormat = "NAB" | "Westpac";
+
 export type Transaction = {
   id?: string;
   date: string;
   description: string;
   category: string;
   amount: number;
+  sourceBank?: BankFormat;
+  isOneOff?: boolean;
 };
-
-export type BankFormat = "NAB" | "Westpac";
 
 export type ParsedTransactionsCSV = {
   bank: BankFormat;

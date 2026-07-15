@@ -23,7 +23,7 @@ export default function SpendingChart() {
     const totals = new Map<string, number>();
 
     for (const transaction of transactions) {
-      if (transaction.amount >= 0) continue;
+      if (transaction.amount >= 0 || transaction.isOneOff) continue;
       const group = resolveGroupName(transaction.category, categories);
       totals.set(group, (totals.get(group) ?? 0) + Math.abs(transaction.amount));
     }

@@ -56,10 +56,14 @@ export default function ChatPanel() {
     }
 
     try {
+      // One-off transactions are excluded from AI analysis, same as every
+      // other dashboard calculation — they're a distraction from the user's
+      // normal spending pattern, not part of it.
+      const analyzedTransactions = transactions.filter((t) => !t.isOneOff);
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, transactions, mode }),
+        body: JSON.stringify({ question, transactions: analyzedTransactions, mode }),
       });
 
       if (!response.ok || !response.body) {

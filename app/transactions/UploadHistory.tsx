@@ -35,10 +35,16 @@ export default function UploadHistory() {
     }
   }
 
-  if (batches.length === 0) return null;
+  if (batches.length === 0) {
+    return (
+      <p className="mt-4 text-sm text-zinc-500 dark:text-zinc-400">
+        No uploads yet — upload a CSV from the Transactions tab to get started.
+      </p>
+    );
+  }
 
   return (
-    <div className="mt-6 rounded-lg border border-black/10 p-4 dark:border-white/10">
+    <div className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">Upload History</h2>
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -61,6 +67,11 @@ export default function UploadHistory() {
               >
                 {batch.sourceBank}
               </span>
+              {batch.fileName && (
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {batch.fileName}
+                </span>
+              )}
               <span className="text-sm">
                 {batch.transactionCount} transaction{batch.transactionCount === 1 ? "" : "s"}
                 {batch.skippedCount > 0 && (

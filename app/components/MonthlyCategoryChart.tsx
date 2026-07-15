@@ -32,7 +32,7 @@ export default function MonthlyCategoryChart() {
     const categorySet = new Set<string>();
 
     for (const transaction of transactions) {
-      if (transaction.amount >= 0) continue;
+      if (transaction.amount >= 0 || transaction.isOneOff) continue;
 
       const monthKey = transaction.date.slice(0, 7);
       const group = resolveGroupName(transaction.category, userCategories);

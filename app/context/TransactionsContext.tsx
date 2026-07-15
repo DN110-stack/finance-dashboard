@@ -10,6 +10,7 @@ import { extractKeyword, matchCategoryForDescription, UNCATEGORIZED } from "../l
 export type UploadBatch = {
   id: string;
   sourceBank: BankFormat;
+  fileName: string | null;
   transactionCount: number;
   skippedCount: number;
   createdAt: string;
@@ -26,7 +27,8 @@ type TransactionsContextValue = {
   isLoading: boolean;
   addTransactions: (
     transactions: Transaction[],
-    sourceBank: BankFormat
+    sourceBank: BankFormat,
+    fileName: string
   ) => Promise<AddTransactionsResult>;
   assignCategory: (transaction: Transaction, category: Category) => Promise<void>;
   assignCategories: (
@@ -34,6 +36,7 @@ type TransactionsContextValue = {
   ) => Promise<void>;
   deleteBatch: (batchId: string) => Promise<void>;
   deleteTransactions: (transactionIds: string[]) => Promise<void>;
+  setTransactionOneOff: (transactionId: string, isOneOff: boolean) => Promise<void>;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -54,7 +57,7 @@ async function fetchTransactions(supabase: SupabaseClient, userId: string) {
 
   const { data, error, status, statusText } = await supabase
     .from("transactions")
-    .select("id, date, description, category, amount")
+    .select("id, date, description, category, amount, source_bank, is_one_off")
     .eq("user_id", userId)
     .order("date", { ascending: true });
 
@@ -74,13 +77,15 @@ async function fetchTransactions(supabase: SupabaseClient, userId: string) {
     description: row.description,
     category: row.category,
     amount: Number(row.amount),
+    sourceBank: row.source_bank ?? undefined,
+    isOneOff: row.is_one_off ?? false,
   }));
 }
 
 async function fetchBatches(supabase: SupabaseClient, userId: string): Promise<UploadBatch[]> {
   const { data, error } = await supabase
     .from("upload_batches")
-    .select("id, source_bank, transaction_count, skipped_count, created_at")
+    .select("id, source_bank, file_name, transaction_count, skipped_count, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
@@ -89,6 +94,7 @@ async function fetchBatches(supabase: SupabaseClient, userId: string): Promise<U
   return (data ?? []).map((row) => ({
     id: row.id,
     sourceBank: row.source_bank,
+    fileName: row.file_name,
     transactionCount: row.transaction_count,
     skippedCount: row.skipped_count,
     createdAt: row.created_at,
@@ -155,7 +161,8 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
   async function addTransactions(
     newTransactions: Transaction[],
-    sourceBank: BankFormat
+    sourceBank: BankFormat,
+    fileName: string
   ): Promise<AddTransactionsResult> {
     const supabase = createClient();
     const {
@@ -209,10 +216,11 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       .insert({
         user_id: user.id,
         source_bank: sourceBank,
+        file_name: fileName,
         transaction_count: categorized.length,
         skipped_count: skippedCount,
       })
-      .select("id, source_bank, transaction_count, skipped_count, created_at")
+      .select("id, source_bank, file_name, transaction_count, skipped_count, created_at")
       .single();
 
     if (batchError) throw new Error(batchError.message);
@@ -220,6 +228,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     const newBatch: UploadBatch = {
       id: batchRow.id,
       sourceBank: batchRow.source_bank,
+      fileName: batchRow.file_name,
       transactionCount: batchRow.transaction_count,
       skippedCount: batchRow.skipped_count,
       createdAt: batchRow.created_at,
@@ -249,6 +258,8 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       description: row.description,
       category: row.category,
       amount: Number(row.amount),
+      sourceBank: row.source_bank ?? undefined,
+      isOneOff: row.is_one_off ?? false,
     }));
 
     setTransactions((prev) => sortByDate([...prev, ...insertedTransactions]));
@@ -482,6 +493,20 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     }
   }
 
+  async function setTransactionOneOff(transactionId: string, isOneOff: boolean) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("transactions")
+      .update({ is_one_off: isOneOff })
+      .eq("id", transactionId);
+
+    if (error) throw new Error(error.message);
+
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === transactionId ? { ...t, isOneOff } : t))
+    );
+  }
+
   return (
     <TransactionsContext.Provider
       value={{
@@ -493,6 +518,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         assignCategories,
         deleteBatch,
         deleteTransactions,
+        setTransactionOneOff,
       }}
     >
       {children}

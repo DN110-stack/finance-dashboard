@@ -22,14 +22,11 @@ const SUGGEST_TOOL: Anthropic.Tool = {
             },
             category: {
               type: "string",
-              description: "Suggested category name, e.g. 'Groceries'",
-            },
-            isNewCategory: {
-              type: "boolean",
-              description: "true if this category name is NOT in the user's existing categories list",
+              description:
+                "The best-fitting category name, copied exactly (same spelling and case) from the user's existing categories list",
             },
           },
-          required: ["index", "category", "isNewCategory"],
+          required: ["index", "category"],
         },
       },
     },
@@ -37,16 +34,18 @@ const SUGGEST_TOOL: Anthropic.Tool = {
   },
 };
 
+// AI suggestions only ever pick from the user's existing categories — never
+// invent new ones. New categories are something the user creates explicitly
+// through the "+ New category" flows elsewhere in the app.
 function buildSystemPrompt(existingCategories: string[]): string {
-  const categoryList = existingCategories.length > 0 ? existingCategories.join(", ") : "(none yet)";
+  const categoryList = existingCategories.join(", ");
 
   return [
     "You are a financial assistant that categorizes bank transactions.",
     `The user's existing categories are: ${categoryList}.`,
-    "For each transaction description, suggest the single best-fitting category.",
-    "Strongly prefer an existing category when it reasonably fits — match it exactly as written above.",
-    "Only suggest a new category name when none of the existing ones fit well.",
-    "New category names should be short (1-3 words), title case (e.g. 'Home Improvement'), and generic enough to reuse for similar future transactions — never a copy of the merchant name itself.",
+    "For each transaction description, choose the single best-fitting category from that exact list.",
+    "You must respond with one of those exact category names, copied exactly as written (same spelling and case) — never invent, rename, or pluralize a category, and never propose a category that isn't in the list.",
+    "If nothing fits well, choose the closest reasonable match from the list rather than making one up.",
     "Respond only by calling the suggest_categories tool, with exactly one entry per transaction, using its index.",
   ].join(" ");
 }
@@ -60,7 +59,9 @@ export async function POST(request: Request) {
     ? body.categories.filter((c: unknown): c is string => typeof c === "string")
     : [];
 
-  if (descriptions.length === 0) {
+  // Nothing to suggest *from* — without existing categories there's no valid
+  // answer the model could give, so don't even ask it to guess.
+  if (descriptions.length === 0 || existingCategories.length === 0) {
     return Response.json({ suggestions: [] satisfies CategorySuggestion[] });
   }
 
@@ -104,19 +105,20 @@ export async function POST(request: Request) {
       const trimmedCategory = category.trim();
       if (!trimmedCategory) continue;
 
-      // Verify the "new category" claim ourselves rather than trusting the
-      // model's boolean — snap to the existing category's exact casing if it
-      // matches, so downstream matching (case-sensitive) works correctly.
+      // Never trust the model to only return existing categories — verify
+      // it ourselves and drop anything that isn't an exact (case-insensitive)
+      // match, rather than let a hallucinated category through. Snap to the
+      // existing category's exact casing so downstream matching works.
       const existingMatch = existingCategories.find(
         (c) => c.toLowerCase() === trimmedCategory.toLowerCase()
       );
+      if (!existingMatch) continue;
 
       seenIndices.add(index);
       suggestions.push({
         index,
         description,
-        category: existingMatch ?? trimmedCategory,
-        isNewCategory: !existingMatch,
+        category: existingMatch,
       });
     }
 

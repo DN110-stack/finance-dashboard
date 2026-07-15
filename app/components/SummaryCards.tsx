@@ -13,15 +13,20 @@ export default function SummaryCards() {
   const { transactions } = useTransactions();
 
   const { totalBalance, monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
-    const totalBalance = transactions.reduce((sum, t) => sum + t.amount, 0);
+    // One-off transactions are excluded from every dashboard calculation —
+    // they're still visible/manageable on the Transactions page, just not
+    // part of the recurring-spending picture shown here.
+    const included = transactions.filter((t) => !t.isOneOff);
 
-    const latestMonth = transactions.reduce<string | null>((latest, t) => {
+    const totalBalance = included.reduce((sum, t) => sum + t.amount, 0);
+
+    const latestMonth = included.reduce<string | null>((latest, t) => {
       const month = t.date.slice(0, 7);
       return !latest || month > latest ? month : latest;
     }, null);
 
     const monthlyTransactions = latestMonth
-      ? transactions.filter((t) => t.date.slice(0, 7) === latestMonth)
+      ? included.filter((t) => t.date.slice(0, 7) === latestMonth)
       : [];
 
     const monthlyIncome = monthlyTransactions

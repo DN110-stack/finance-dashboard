@@ -1,8 +1,9 @@
+// `category` is always one of the user's existing category names — the API
+// route never lets a suggestion through that isn't an exact match.
 export type CategorySuggestion = {
   index: number;
   description: string;
   category: string;
-  isNewCategory: boolean;
 };
 
 const BATCH_SIZE = 50;

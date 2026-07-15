@@ -23,7 +23,6 @@ function initialSelections(
   categories: Category[]
 ) {
   const selections: Record<string, string> = {};
-  const newNames: Record<string, string> = {};
 
   for (const transaction of transactions) {
     const id = transaction.id;
@@ -32,18 +31,16 @@ function initialSelections(
     const suggestion = suggestions[id];
     if (!suggestion) continue;
 
-    if (suggestion.isNewCategory) {
-      selections[id] = NEW_CATEGORY_VALUE;
-      newNames[id] = suggestion.category;
-    } else {
-      const match = categories.find(
-        (c) => c.name.toLowerCase() === suggestion.category.toLowerCase()
-      );
-      if (match) selections[id] = match.id;
-    }
+    // Suggestions only ever name an existing category, but the categories
+    // list can still change out from under an already-mounted suggestion
+    // (e.g. deleted mid-review), so guard the lookup anyway.
+    const match = categories.find(
+      (c) => c.name.toLowerCase() === suggestion.category.toLowerCase()
+    );
+    if (match) selections[id] = match.id;
   }
 
-  return { selections, newNames };
+  return { selections };
 }
 
 export default function UncategorizedReview({
@@ -88,7 +85,7 @@ export default function UncategorizedReview({
   }
 
   function newNameFor(id: string) {
-    return newNames[id] ?? suggested.newNames[id] ?? "";
+    return newNames[id] ?? "";
   }
 
   useEffect(() => {
@@ -139,9 +136,8 @@ export default function UncategorizedReview({
     setAcceptingAll(true);
 
     try {
-      // Resolve every loaded suggestion to a real Category, creating each
-      // distinct suggested-new-category once (never once per transaction).
-      const newCategoryCache = new Map<string, Category>();
+      // Every suggestion already names an existing category (the API route
+      // guarantees it) — just resolve each one to its Category record.
       const assignments: { transaction: Transaction; category: Category }[] = [];
 
       for (const transaction of pending) {
@@ -151,16 +147,9 @@ export default function UncategorizedReview({
         const suggestion = suggestions[id];
         if (!suggestion) continue;
 
-        const key = suggestion.category.toLowerCase();
-        let category = categories.find((c) => c.name.toLowerCase() === key);
-
-        if (!category && suggestion.isNewCategory) {
-          category = newCategoryCache.get(key);
-          if (!category) {
-            category = await addCategory(suggestion.category, DEFAULT_COLOUR);
-            newCategoryCache.set(key, category);
-          }
-        }
+        const category = categories.find(
+          (c) => c.name.toLowerCase() === suggestion.category.toLowerCase()
+        );
 
         if (category) assignments.push({ transaction, category });
       }
