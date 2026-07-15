@@ -15,6 +15,7 @@ import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
 import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
+import EmptyChartState from "./charts/EmptyChartState";
 
 export default function SpendingChart({ period }: { period: PeriodState }) {
   const { transactions } = useTransactions();
@@ -36,6 +37,8 @@ export default function SpendingChart({ period }: { period: PeriodState }) {
       total: Math.round((totals.get(category) ?? 0) * 100) / 100,
     }));
   }, [transactions, categories, period]);
+
+  if (data.length === 0) return <EmptyChartState />;
 
   return (
     <ResponsiveContainer width="100%" height="100%">

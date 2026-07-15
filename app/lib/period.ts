@@ -30,11 +30,16 @@ export const PERIOD_OPTIONS: { value: PeriodOption; label: string }[] = [
 // Transaction dates are plain "YYYY-MM-DD" strings compared lexicographically
 // throughout the app — format from local Y/M/D rather than toISOString(),
 // which converts through UTC and can shift the date by a day.
-function toISODate(date: Date): string {
+export function toISODate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+export function parseISODate(iso: string): Date {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, month - 1, day);
 }
 
 // Returns an inclusive [from, to] ISO date range for the given period.
@@ -88,4 +93,13 @@ export function filterTransactionsByPeriod<T extends { date: string }>(
   const range = getPeriodRange(period, now);
   if (!range) return [];
   return transactions.filter((t) => t.date >= range.from && t.date <= range.to);
+}
+
+// Formats a "YYYY-MM" month key (e.g. "2026-07") as "Jul 26" for chart axes.
+export function formatMonthLabel(monthKey: string): string {
+  const [year, month] = monthKey.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+    month: "short",
+    year: "2-digit",
+  });
 }

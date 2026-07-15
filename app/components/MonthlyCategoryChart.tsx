@@ -14,15 +14,8 @@ import {
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
-import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
-
-function formatMonthLabel(monthKey: string) {
-  const [year, month] = monthKey.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
-    month: "short",
-    year: "2-digit",
-  });
-}
+import { filterTransactionsByPeriod, formatMonthLabel, type PeriodState } from "../lib/period";
+import EmptyChartState from "./charts/EmptyChartState";
 
 export default function MonthlyCategoryChart({ period }: { period: PeriodState }) {
   const { transactions } = useTransactions();
@@ -59,6 +52,8 @@ export default function MonthlyCategoryChart({ period }: { period: PeriodState }
 
     return { data, categories };
   }, [transactions, userCategories, period]);
+
+  if (data.length === 0) return <EmptyChartState />;
 
   return (
     <ResponsiveContainer width="100%" height="100%">
