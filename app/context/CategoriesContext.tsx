@@ -10,10 +10,17 @@ export type Category = {
   parentCategory: string | null;
 };
 
+type CategoryUpdates = {
+  name: string;
+  colour: string;
+  parentCategory: string | null;
+};
+
 type CategoriesContextValue = {
   categories: Category[];
   isLoading: boolean;
   addCategory: (name: string, colour: string, parentCategory?: string | null) => Promise<Category>;
+  updateCategory: (id: string, updates: CategoryUpdates) => Promise<Category>;
   deleteCategory: (id: string) => Promise<void>;
 };
 
@@ -111,6 +118,43 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     return category;
   }
 
+  async function updateCategory(id: string, updates: CategoryUpdates) {
+    const trimmedName = updates.name.trim();
+
+    // Never let a rename collide (case-insensitively) with a *different*
+    // existing category — same duplicate-prevention rule as addCategory.
+    const collision = categories.find(
+      (category) => category.id !== id && category.name.toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (collision) {
+      throw new Error(`"${trimmedName}" already exists as a category`);
+    }
+
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("categories")
+      .update({
+        name: trimmedName,
+        colour: updates.colour,
+        parent_category: updates.parentCategory,
+      })
+      .eq("id", id)
+      .select("id, name, colour, parent_category")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const category: Category = {
+      id: data.id,
+      name: data.name,
+      colour: data.colour,
+      parentCategory: data.parent_category,
+    };
+
+    setCategories((prev) => sortByName(prev.map((c) => (c.id === id ? category : c))));
+    return category;
+  }
+
   async function deleteCategory(id: string) {
     const supabase = createClient();
     const { error } = await supabase.from("categories").delete().eq("id", id);
@@ -120,7 +164,9 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <CategoriesContext.Provider value={{ categories, isLoading, addCategory, deleteCategory }}>
+    <CategoriesContext.Provider
+      value={{ categories, isLoading, addCategory, updateCategory, deleteCategory }}
+    >
       {children}
     </CategoriesContext.Provider>
   );

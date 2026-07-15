@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
@@ -12,8 +13,8 @@ import { fetchCategorySuggestions, type CategorySuggestion } from "../lib/catego
 import CategoryCell from "./CategoryCell";
 import UncategorizedReview from "./UncategorizedReview";
 import TransactionFilters, {
-  EMPTY_TRANSACTION_FILTERS,
   countActiveTransactionFilters,
+  filtersFromSearchParams,
   CATEGORY_FILTER_PREFIX,
   PARENT_FILTER_PREFIX,
   type TransactionFilterState,
@@ -53,7 +54,15 @@ export default function TransactionsTable() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [togglingOneOffIds, setTogglingOneOffIds] = useState<Set<string>>(new Set());
-  const [filters, setFilters] = useState<TransactionFilterState>(EMPTY_TRANSACTION_FILTERS);
+  // Seeds filters from the URL on first mount only — e.g. a "View in
+  // Transactions" link from a dashboard chart drill-down. searchParams is
+  // read at the top level (rules-of-hooks) but only consulted once, inside
+  // the lazy initializer, since later in-page filter edits shouldn't be
+  // fighting with the URL.
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<TransactionFilterState>(() =>
+    filtersFromSearchParams(searchParams)
+  );
   const [sortColumn, setSortColumn] = useState<SortColumn>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [perPage, setPerPage] = useState<number>(50);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -14,12 +14,15 @@ import {
 import { useTransactions } from "../../context/TransactionsContext";
 import {
   filterTransactionsByPeriod,
+  formatPeriodLabel,
   getPeriodRange,
   parseISODate,
   toISODate,
   type PeriodState,
 } from "../../lib/period";
+import { buildTransactionsHref } from "../../transactions/TransactionFilters";
 import EmptyChartState from "./EmptyChartState";
+import DrillDownPanel, { type DrillDownData } from "./DrillDownPanel";
 
 const LINE_COLOR = "#2a78d6";
 
@@ -27,8 +30,11 @@ function formatDateLabel(iso: string) {
   return parseISODate(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+type DotProps = { cx?: number; cy?: number; payload?: { iso: string } };
+
 export default function CashFlowChart({ period }: { period: PeriodState }) {
   const { transactions } = useTransactions();
+  const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
 
   const data = useMemo(() => {
     const range = getPeriodRange(period);
@@ -48,38 +54,63 @@ export default function CashFlowChart({ period }: { period: PeriodState }) {
     // Walk every day in the period (not just days with transactions) so the
     // line stays flat between transactions instead of misleadingly
     // connecting distant dates.
-    const rows: { date: string; balance: number }[] = [];
+    const rows: { date: string; iso: string; balance: number }[] = [];
     let running = 0;
     const cursor = parseISODate(range.from);
     const end = parseISODate(range.to);
     while (cursor <= end) {
       const iso = toISODate(cursor);
       running += byDay.get(iso) ?? 0;
-      rows.push({ date: formatDateLabel(iso), balance: Math.round(running * 100) / 100 });
+      rows.push({ date: formatDateLabel(iso), iso, balance: Math.round(running * 100) / 100 });
       cursor.setDate(cursor.getDate() + 1);
     }
     return rows;
   }, [transactions, period]);
 
+  function handlePointClick(iso: string) {
+    const matches = transactions.filter((t) => !t.isOneOff && t.date === iso);
+    setDrillDown({
+      title: formatPeriodLabel({ from: iso, to: iso }),
+      transactions: matches,
+      href: buildTransactionsHref({ dateFrom: iso, dateTo: iso }),
+    });
+  }
+
   if (data.length === 0) return <EmptyChartState />;
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <LineChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
-        <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-        <YAxis tick={{ fontSize: 12 }} />
-        <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
-        <ReferenceLine y={0} className="stroke-black/20 dark:stroke-white/20" />
-        <Line
-          type="monotone"
-          dataKey="balance"
-          name="Running balance"
-          stroke={LINE_COLOR}
-          strokeWidth={2}
-          dot={false}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+    <>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 12 }} />
+          <Tooltip formatter={(value) => `$${Number(value).toFixed(2)}`} />
+          <ReferenceLine y={0} className="stroke-black/20 dark:stroke-white/20" />
+          <Line
+            type="monotone"
+            dataKey="balance"
+            name="Running balance"
+            stroke={LINE_COLOR}
+            strokeWidth={2}
+            dot={(dotProps: DotProps) => {
+              const iso = dotProps.payload?.iso;
+              return (
+                <g
+                  key={`dot-${iso}`}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => iso && handlePointClick(iso)}
+                >
+                  <circle cx={dotProps.cx} cy={dotProps.cy} r={8} fill="transparent" />
+                  <circle cx={dotProps.cx} cy={dotProps.cy} r={2.5} fill={LINE_COLOR} />
+                </g>
+              );
+            }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+
+      {drillDown && <DrillDownPanel data={drillDown} onClose={() => setDrillDown(null)} />}
+    </>
   );
 }

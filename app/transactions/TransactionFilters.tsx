@@ -50,6 +50,42 @@ export function countActiveTransactionFilters(filters: TransactionFilterState): 
   ].filter(Boolean).length;
 }
 
+// Builds a /transactions link that pre-applies a partial set of filters —
+// used by dashboard chart drill-downs so "View in Transactions" lands on
+// exactly the same rows the drill-down panel showed.
+export function buildTransactionsHref(filters: Partial<TransactionFilterState>): string {
+  const merged = { ...EMPTY_TRANSACTION_FILTERS, ...filters };
+  const params = new URLSearchParams();
+
+  if (merged.search) params.set("search", merged.search);
+  if (merged.category) params.set("category", merged.category);
+  if (merged.bank) params.set("bank", merged.bank);
+  if (merged.dateFrom) params.set("dateFrom", merged.dateFrom);
+  if (merged.dateTo) params.set("dateTo", merged.dateTo);
+  if (merged.amountMin) params.set("amountMin", merged.amountMin);
+  if (merged.amountMax) params.set("amountMax", merged.amountMax);
+  if (merged.oneOff) params.set("oneOff", merged.oneOff);
+
+  const query = params.toString();
+  return query ? `/transactions?${query}` : "/transactions";
+}
+
+// The inverse of buildTransactionsHref — reads a TransactionFilterState back
+// out of the URL so the Transactions page can seed its filters from a link.
+export function filtersFromSearchParams(params: URLSearchParams): TransactionFilterState {
+  const oneOff = params.get("oneOff");
+  return {
+    search: params.get("search") ?? "",
+    category: params.get("category") ?? "",
+    bank: params.get("bank") ?? "",
+    dateFrom: params.get("dateFrom") ?? "",
+    dateTo: params.get("dateTo") ?? "",
+    amountMin: params.get("amountMin") ?? "",
+    amountMax: params.get("amountMax") ?? "",
+    oneOff: oneOff === "hide" || oneOff === "only" ? oneOff : "",
+  };
+}
+
 const fieldClasses =
   "w-full rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm placeholder:text-zinc-400 focus:border-black/20 focus:outline-none dark:border-white/10 dark:focus:border-white/20";
 

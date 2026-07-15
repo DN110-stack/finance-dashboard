@@ -103,3 +103,48 @@ export function formatMonthLabel(monthKey: string): string {
     year: "2-digit",
   });
 }
+
+// Returns the full-month [from, to] range for a "YYYY-MM" key — used by
+// chart drill-downs to turn "the bar for July 2026" into a concrete range.
+export function getMonthRange(monthKey: string): { from: string; to: string } {
+  const [year, month] = monthKey.split("-").map(Number);
+  return {
+    from: toISODate(new Date(year, month - 1, 1)),
+    to: toISODate(new Date(year, month, 0)),
+  };
+}
+
+// Human-readable label for a date range, used as a chart drill-down title —
+// "June 2026" for a full calendar month, "July 15, 2026" for a single day,
+// and a "Jun 1 – Aug 31, 2026" span otherwise.
+export function formatPeriodLabel(range: { from: string; to: string }): string {
+  const fromDate = parseISODate(range.from);
+  const toDate = parseISODate(range.to);
+
+  if (range.from === range.to) {
+    return fromDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  }
+
+  const isFullMonth =
+    fromDate.getDate() === 1 &&
+    toDate.getFullYear() === fromDate.getFullYear() &&
+    toDate.getMonth() === fromDate.getMonth() &&
+    toDate.getDate() === new Date(fromDate.getFullYear(), fromDate.getMonth() + 1, 0).getDate();
+
+  if (isFullMonth) {
+    return fromDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  const sameYear = fromDate.getFullYear() === toDate.getFullYear();
+  const fromLabel = fromDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: sameYear ? undefined : "numeric",
+  });
+  const toLabel = toDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${fromLabel} – ${toLabel}`;
+}

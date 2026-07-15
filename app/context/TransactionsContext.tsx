@@ -37,6 +37,7 @@ type TransactionsContextValue = {
   deleteBatch: (batchId: string) => Promise<void>;
   deleteTransactions: (transactionIds: string[]) => Promise<void>;
   setTransactionOneOff: (transactionId: string, isOneOff: boolean) => Promise<void>;
+  renameCategoryInTransactions: (oldName: string, newName: string) => Promise<number>;
 };
 
 const TransactionsContext = createContext<TransactionsContextValue | null>(null);
@@ -507,6 +508,39 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     );
   }
 
+  // Cascades a category rename onto every transaction that used the old
+  // name — called after a category is renamed in CategoriesContext, so a
+  // renamed category doesn't orphan the transactions filed under its old
+  // name. Returns how many rows were actually updated.
+  async function renameCategoryInTransactions(oldName: string, newName: string): Promise<number> {
+    if (oldName.trim().toLowerCase() === newName.trim().toLowerCase()) return 0;
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("You must be logged in to update transactions");
+    }
+
+    const { data: updated, error } = await supabase
+      .from("transactions")
+      .update({ category: newName })
+      .eq("user_id", user.id)
+      .ilike("category", oldName)
+      .select("id");
+
+    if (error) throw new Error(error.message);
+
+    const updatedIds = new Set((updated ?? []).map((row) => row.id));
+    setTransactions((prev) =>
+      prev.map((t) => (t.id && updatedIds.has(t.id) ? { ...t, category: newName } : t))
+    );
+
+    return updatedIds.size;
+  }
+
   return (
     <TransactionsContext.Provider
       value={{
@@ -519,6 +553,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         deleteBatch,
         deleteTransactions,
         setTransactionOneOff,
+        renameCategoryInTransactions,
       }}
     >
       {children}
