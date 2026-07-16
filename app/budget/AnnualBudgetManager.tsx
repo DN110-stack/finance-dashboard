@@ -1,25 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ChevronUp,
-  CircleCheck,
-  Pencil,
-  PiggyBank,
-  Plus,
-  Trash2,
-  TriangleAlert,
-  X,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleCheck, PiggyBank, Plus, TriangleAlert, X } from "lucide-react";
 import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import { useSettings } from "../context/SettingsContext";
 import { orderByParentPriority } from "../lib/categories";
-import { progressBarColour } from "../lib/budgets";
 import {
   calculateAnnualPace,
   formatYearLabel,
@@ -37,7 +24,8 @@ import {
   CATEGORY_FILTER_PREFIX,
 } from "../transactions/TransactionFilters";
 import DrillDownPanel, { type DrillDownData } from "../components/charts/DrillDownPanel";
-import Sparkline from "./Sparkline";
+import BudgetCard from "./BudgetCard";
+import FloatingAddButton from "./FloatingAddButton";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -58,6 +46,10 @@ type CardItem = {
   percent: number;
   monthlyValues: number[]; // Jan..Dec spend for the sparkline
 };
+
+// Per-card entrance stagger — kept short so a full grid doesn't take long to
+// finish settling in.
+const CARD_STAGGER_MS = 40;
 
 export default function AnnualBudgetManager() {
   const {
@@ -103,8 +95,8 @@ export default function AnnualBudgetManager() {
   // BudgetManager.tsx's monthly carryForwardChecked guard.
   const carryForwardChecked = useRef<Set<string>>(new Set());
 
-  // Progress bars animate in from 0 whenever the visible year's data
-  // changes, rather than snapping straight to their target width.
+  // Progress meters animate in from 0 whenever the visible year's data
+  // changes, rather than snapping straight to their target fill.
   const [barsReady, setBarsReady] = useState(false);
   useEffect(() => {
     setBarsReady(false);
@@ -474,6 +466,7 @@ export default function AnnualBudgetManager() {
   }
 
   const showEmptyState = !isLoading && cardItems.length === 0 && !isAdding;
+  const showFab = !isLoading && !isAdding && !showEmptyState && availableCategories.length > 0;
 
   return (
     <>
@@ -502,30 +495,18 @@ export default function AnnualBudgetManager() {
           </div>
 
           {!isAdding && !showEmptyState && cardItems.length > 0 && (
-            <div className="flex items-center gap-2">
-              <select
-                value={sortOption}
-                onChange={(e) => setSortOption(e.target.value as SortOption)}
-                aria-label="Sort annual budgets"
-                className="rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              {availableCategories.length > 0 && (
-                <button
-                  type="button"
-                  onClick={handleOpenAdd}
-                  className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Annual Budget
-                </button>
-              )}
-            </div>
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              aria-label="Sort annual budgets"
+              className="rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           )}
         </div>
 
@@ -712,7 +693,7 @@ export default function AnnualBudgetManager() {
             )}
 
             {showEmptyState ? (
-              <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-black/10 p-10 text-center dark:border-white/10">
+              <div className="flex min-h-[16rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-black/10 p-10 text-center dark:border-white/10">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                   <PiggyBank className="h-7 w-7" />
                 </div>
@@ -736,13 +717,13 @@ export default function AnnualBudgetManager() {
               cardItems.length > 0 && (
                 <>
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
                       <p className="text-sm text-zinc-500 dark:text-zinc-400">Total Budgeted</p>
                       <p className="mt-1 text-2xl font-semibold">
                         {currencyFormatter.format(totals.budgeted)}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
                       <p className="text-sm text-zinc-500 dark:text-zinc-400">Spent Year to Date</p>
                       <p
                         className={`mt-1 text-2xl font-semibold ${
@@ -754,7 +735,7 @@ export default function AnnualBudgetManager() {
                         {currencyFormatter.format(totals.spent)}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
                       <p className="text-sm text-zinc-500 dark:text-zinc-400">Projected Year-End</p>
                       <p
                         className={`mt-1 text-2xl font-semibold ${
@@ -766,7 +747,15 @@ export default function AnnualBudgetManager() {
                         {currencyFormatter.format(projectedTotal)}
                       </p>
                     </div>
-                    <div className="rounded-lg border border-black/10 p-4 dark:border-white/10">
+                    <div
+                      className={`rounded-xl border p-4 ${
+                        overallPace === "atRisk"
+                          ? "border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10"
+                          : overallPace === "onTrack"
+                            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
+                            : "border-black/10 dark:border-white/10"
+                      }`}
+                    >
                       <p className="text-sm text-zinc-500 dark:text-zinc-400">Months Remaining</p>
                       <p className="mt-1 text-2xl font-semibold">{monthsRemaining}</p>
                     </div>
@@ -791,8 +780,8 @@ export default function AnnualBudgetManager() {
                     </span>
                   )}
 
-                  <div className="flex flex-col gap-3">
-                    {cardItems.map((item) => {
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {cardItems.map((item, index) => {
                       const isEditing = editingId === item.id;
                       const isExpanded = expandedIds.has(item.id);
 
@@ -816,238 +805,82 @@ export default function AnnualBudgetManager() {
                       );
 
                       return (
-                        <div
+                        <BudgetCard
                           key={item.id}
-                          onClick={() => !isEditing && openDrillDown(item)}
-                          className={`rounded-lg border border-black/10 p-4 dark:border-white/10 ${
-                            isEditing
-                              ? ""
-                              : "cursor-pointer transition-colors hover:border-black/20 dark:hover:border-white/20"
-                          }`}
-                        >
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                              {item.kind === "group" ? (
-                                <div className="flex -space-x-1.5">
-                                  {item.categories.slice(0, 5).map((c) => (
-                                    <span
-                                      key={c.id}
-                                      title={c.name}
-                                      className="h-3.5 w-3.5 shrink-0 rounded-full ring-2 ring-background"
-                                      style={{ backgroundColor: c.colour }}
-                                    />
-                                  ))}
-                                  {item.categories.length > 5 && (
-                                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-zinc-300 text-[8px] font-medium text-zinc-700 ring-2 ring-background dark:bg-zinc-600 dark:text-zinc-200">
-                                      +{item.categories.length - 5}
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span
-                                  className="h-3 w-3 shrink-0 rounded-full"
-                                  style={{ backgroundColor: item.categories[0]?.colour }}
-                                />
-                              )}
-                              <span className="font-medium">{item.name}</span>
-                              {item.kind === "group" && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleExpanded(item.id);
-                                  }}
-                                  aria-label={isExpanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
-                                  aria-expanded={isExpanded}
-                                  className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
-                                >
-                                  {isExpanded ? (
-                                    <ChevronUp className="h-4 w-4" />
-                                  ) : (
-                                    <ChevronDown className="h-4 w-4" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-3">
-                              <Sparkline values={item.monthlyValues} />
-
-                              {!isEditing && (
-                                <div className="flex items-center gap-1">
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleStartEdit(item);
-                                    }}
-                                    aria-label={`Edit annual budget for ${item.name}`}
-                                    className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDelete(item);
-                                    }}
-                                    disabled={deletingId === item.id}
-                                    aria-label={`Delete annual budget for ${item.name}`}
-                                    className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {isEditing ? (
-                            <div className="mt-3 flex flex-wrap items-end gap-3">
-                              <div className="flex flex-col gap-1">
-                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                                  Annual amount
-                                </label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={editAmount}
-                                  onChange={(e) => setEditAmount(e.target.value)}
-                                  autoFocus
-                                  className="w-32 rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
-                                />
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleSaveEdit(item)}
-                                disabled={isSavingEdit || !editAmount.trim()}
-                                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-                              >
-                                {isSavingEdit ? "Saving…" : "Save"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCancelEdit}
-                                disabled={isSavingEdit}
-                                className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="mt-3 flex items-center gap-2">
-                                <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/10 dark:bg-white/10">
-                                  <div
-                                    className={`h-full rounded-full transition-[width] duration-700 ease-out ${progressBarColour(percent)}`}
-                                    style={{ width: `${barsReady ? Math.min(percent, 100) : 0}%` }}
-                                  />
-                                </div>
-                                <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  {Math.round(percent)}%
-                                </span>
-                              </div>
-
-                              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                                <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                                  {currencyFormatter.format(item.spentYTD)} of{" "}
-                                  {currencyFormatter.format(item.amount)} spent
-                                </span>
-
-                                <div className="flex items-center gap-3">
-                                  <span
-                                    className={
-                                      remaining < 0
-                                        ? "text-sm font-medium text-red-600 dark:text-red-400"
-                                        : "text-sm font-medium text-emerald-600 dark:text-emerald-400"
-                                    }
-                                  >
-                                    {remaining < 0
-                                      ? `Overspent by ${currencyFormatter.format(Math.abs(remaining))}`
-                                      : `${currencyFormatter.format(remaining)} remaining`}
-                                  </span>
-
-                                  {pace && (
-                                    <span
-                                      className={`flex items-center gap-1 text-xs ${
-                                        pace === "atRisk"
-                                          ? "text-amber-600 dark:text-amber-400"
-                                          : "text-emerald-600 dark:text-emerald-400"
-                                      }`}
+                          name={item.name}
+                          isGroup={item.kind === "group"}
+                          categories={item.categories}
+                          percent={percent}
+                          spent={item.spentYTD}
+                          amount={item.amount}
+                          remaining={remaining}
+                          pace={pace}
+                          sparklineValues={item.monthlyValues}
+                          barsReady={barsReady}
+                          animationDelayMs={index * CARD_STAGGER_MS}
+                          isEditing={isEditing}
+                          editAmount={editAmount}
+                          onEditAmountChange={setEditAmount}
+                          amountFieldLabel="Annual amount"
+                          isSavingEdit={isSavingEdit}
+                          onSaveEdit={() => handleSaveEdit(item)}
+                          onCancelEdit={handleCancelEdit}
+                          editAriaLabel={`Edit annual budget for ${item.name}`}
+                          deleteAriaLabel={`Delete annual budget for ${item.name}`}
+                          onStartEdit={() => handleStartEdit(item)}
+                          onDelete={() => handleDelete(item)}
+                          isDeleting={deletingId === item.id}
+                          onClick={() => openDrillDown(item)}
+                          onViewTransactions={() => openDrillDown(item)}
+                          isExpandable={item.kind === "group"}
+                          isExpanded={isExpanded}
+                          expandAriaLabel={isExpanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
+                          onToggleExpand={() => toggleExpanded(item.id)}
+                          expandedContent={
+                            item.kind === "group" ? (
+                              <div className="mt-3 flex flex-col gap-1.5 border-t border-black/10 pt-3 dark:border-white/10">
+                                {item.categories
+                                  .map((category) => ({
+                                    category,
+                                    spentYTD: yearMonths.reduce(
+                                      (sum, m) => sum + spentForCategoriesInMonth([category], m),
+                                      0
+                                    ),
+                                  }))
+                                  .sort((a, b) => b.spentYTD - a.spentYTD)
+                                  .map(({ category, spentYTD }) => (
+                                    <div
+                                      key={category.id}
+                                      className="flex items-center justify-between gap-2 text-sm"
                                     >
-                                      {pace === "atRisk" ? (
-                                        <TriangleAlert className="h-3 w-3" />
-                                      ) : (
-                                        <CircleCheck className="h-3 w-3" />
-                                      )}
-                                      {pace === "atRisk" ? "At risk" : "On track"}
-                                    </span>
-                                  )}
-
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openDrillDown(item);
-                                    }}
-                                    className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
-                                  >
-                                    View transactions
-                                  </button>
-                                </div>
-                              </div>
-
-                              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                                {currencyFormatter.format(avgMonthlySpent)}/mo spent vs{" "}
-                                {currencyFormatter.format(avgMonthlyNeeded)}/mo needed
-                                {isCurrentYear && (
-                                  <> · projected {currencyFormatter.format(itemProjected)} by year-end</>
-                                )}
-                              </p>
-                            </>
-                          )}
-
-                          {item.kind === "group" && isExpanded && (
-                            <div className="mt-3 flex flex-col gap-1.5 border-t border-black/10 pt-3 dark:border-white/10">
-                              {item.categories
-                                .map((category) => ({
-                                  category,
-                                  spentYTD: yearMonths.reduce(
-                                    (sum, m) => sum + spentForCategoriesInMonth([category], m),
-                                    0
-                                  ),
-                                }))
-                                .sort((a, b) => b.spentYTD - a.spentYTD)
-                                .map(({ category, spentYTD }) => (
-                                  <div
-                                    key={category.id}
-                                    className="flex items-center justify-between gap-2 text-sm"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <span
-                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                        style={{ backgroundColor: category.colour }}
-                                      />
-                                      <span className="text-zinc-700 dark:text-zinc-300">
-                                        {category.name}
+                                      <div className="flex items-center gap-2">
+                                        <span
+                                          className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                          style={{ backgroundColor: category.colour }}
+                                        />
+                                        <span className="text-zinc-700 dark:text-zinc-300">
+                                          {category.name}
+                                        </span>
+                                      </div>
+                                      <span className="text-zinc-500 dark:text-zinc-400">
+                                        {currencyFormatter.format(spentYTD)}
                                       </span>
                                     </div>
-                                    <span className="text-zinc-500 dark:text-zinc-400">
-                                      {currencyFormatter.format(spentYTD)}
-                                    </span>
-                                  </div>
-                                ))}
-                            </div>
-                          )}
-
-                          {actionErrors[item.id] && (
-                            <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                              {actionErrors[item.id]}
+                                  ))}
+                              </div>
+                            ) : null
+                          }
+                          extraInfo={
+                            <p className="mt-1 text-center text-xs text-zinc-500 dark:text-zinc-400">
+                              {currencyFormatter.format(avgMonthlySpent)}/mo spent vs{" "}
+                              {currencyFormatter.format(avgMonthlyNeeded)}/mo needed
+                              {isCurrentYear && (
+                                <> · projected {currencyFormatter.format(itemProjected)} by year-end</>
+                              )}
                             </p>
-                          )}
-                        </div>
+                          }
+                          actionError={actionErrors[item.id]}
+                        />
                       );
                     })}
                   </div>
@@ -1057,6 +890,8 @@ export default function AnnualBudgetManager() {
           </>
         )}
       </div>
+
+      {showFab && <FloatingAddButton label="Add Annual Budget" onClick={handleOpenAdd} />}
 
       {drillDown && <DrillDownPanel data={drillDown} onClose={() => setDrillDown(null)} />}
     </>

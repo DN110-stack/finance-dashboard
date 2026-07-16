@@ -24,3 +24,21 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Budget card entrance — fade + slight scale-in, staggered per-card via an
+   inline animation-delay (see BudgetCard.tsx). Applied with fill-mode
+   `backwards` (not `forwards`/`both`) so the 0% state holds during the
+   delay — no flash at full opacity before a card's turn — but the animation
+   effect is fully released once it completes, instead of continuing to pin
+   `transform` at a higher cascade priority than the card's own `:hover`
+   lift (a forwards-filled animation would otherwise block it). */
+@keyframes budget-card-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

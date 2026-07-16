@@ -30,6 +30,16 @@ export function progressBarColour(percent: number): string {
   return "bg-emerald-500";
 }
 
+// Same thresholds as progressBarColour, as an SVG stroke class for the donut
+// meter — kept as a literal set of class names (not derived from
+// progressBarColour's string) since Tailwind's build-time scanner only picks
+// up class names that appear verbatim in source.
+export function donutStrokeColour(percent: number): string {
+  if (percent >= 100) return "stroke-red-500";
+  if (percent >= 75) return "stroke-amber-500";
+  return "stroke-emerald-500";
+}
+
 // Projects month-end spend from the pace so far — (spent / days elapsed) *
 // days in month — and compares it to the budget. Only meaningful for the
 // current month (a past month's pace is moot, a future month has no spend
