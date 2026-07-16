@@ -15,6 +15,7 @@ import UncategorizedReview from "./UncategorizedReview";
 import TransactionFilters, {
   countActiveTransactionFilters,
   filtersFromSearchParams,
+  CATEGORIES_FILTER_PREFIX,
   CATEGORY_FILTER_PREFIX,
   PARENT_FILTER_PREFIX,
   type TransactionFilterState,
@@ -87,6 +88,12 @@ export default function TransactionsTable() {
       if (filters.category.startsWith(PARENT_FILTER_PREFIX)) {
         const parent = filters.category.slice(PARENT_FILTER_PREFIX.length);
         if (resolveGroupName(t.category, categories) !== parent) return false;
+      } else if (filters.category.startsWith(CATEGORIES_FILTER_PREFIX)) {
+        const names = filters.category
+          .slice(CATEGORIES_FILTER_PREFIX.length)
+          .split(",")
+          .map((name) => name.toLowerCase());
+        if (!names.includes(t.category.toLowerCase())) return false;
       } else if (filters.category.startsWith(CATEGORY_FILTER_PREFIX)) {
         const name = filters.category.slice(CATEGORY_FILTER_PREFIX.length);
         if (t.category !== name) return false;

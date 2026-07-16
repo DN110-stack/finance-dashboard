@@ -2,12 +2,15 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import { monthlyEquivalentAmount, type PeriodType } from "../lib/budgetPeriods";
 
 export type Budget = {
   id: string;
   category: string;
-  amount: number;
-  month: string; // "YYYY-MM"
+  amount: number; // always the monthly-equivalent — see budgetPeriods.ts
+  month: string; // "YYYY-MM" — the recurrence anchor for non-monthly periods
+  periodType: PeriodType;
+  periodAmount: number | null; // raw per-period amount; null for period_type "monthly"
 };
 
 export type BudgetGroup = {
@@ -22,7 +25,12 @@ type BudgetsContextValue = {
   budgets: Budget[];
   budgetGroups: BudgetGroup[];
   isLoading: boolean;
-  upsertBudget: (category: string, month: string, amount: number) => Promise<Budget>;
+  upsertBudget: (
+    category: string,
+    month: string,
+    amount: number,
+    period?: { type: PeriodType; periodAmount: number }
+  ) => Promise<Budget>;
   deleteBudget: (id: string) => Promise<void>;
   addBudgetGroup: (
     name: string,
@@ -60,7 +68,7 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from("budgets")
-          .select("id, category, amount, month")
+          .select("id, category, amount, month, period_type, period_amount")
           .eq("user_id", user.id);
 
         if (!error && data && !cancelled) {
@@ -70,6 +78,8 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
               category: row.category,
               amount: Number(row.amount),
               month: row.month,
+              periodType: row.period_type,
+              periodAmount: row.period_amount === null ? null : Number(row.period_amount),
             }))
           );
         }
@@ -116,7 +126,23 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
   // doesn't have one yet or updating the existing amount if it does — the
   // unique (user_id, category, month) constraint is what makes the upsert
   // safe rather than needing to look up an id first.
-  async function upsertBudget(category: string, month: string, amount: number): Promise<Budget> {
+  //
+  // `period` is omitted for every plain-monthly call site (including
+  // carry-forward and copy-from-last-month, which never pass it): that path
+  // writes period_type "monthly" / period_amount null and leaves `amount`
+  // exactly as given, identical to this function's behavior before periods
+  // existed. When provided, the raw `period.periodAmount` is stored as-is
+  // and `amount` is (re)computed as its monthly-equivalent centrally, so
+  // proration only ever happens in one place (budgetPeriods.ts). Callers
+  // editing an existing non-monthly budget must always pass its own
+  // `period` through — omitting it would silently downgrade the budget to
+  // plain monthly and destroy its recurrence.
+  async function upsertBudget(
+    category: string,
+    month: string,
+    amount: number,
+    period?: { type: PeriodType; periodAmount: number }
+  ): Promise<Budget> {
     const supabase = createClient();
     const {
       data: { user },
@@ -126,13 +152,24 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
       throw new Error("You must be logged in to set a budget");
     }
 
+    const periodType: PeriodType = period?.type ?? "monthly";
+    const periodAmount = period ? period.periodAmount : null;
+    const computedAmount = period ? monthlyEquivalentAmount(period.periodAmount, period.type) : amount;
+
     const { data, error } = await supabase
       .from("budgets")
       .upsert(
-        { user_id: user.id, category, month, amount },
+        {
+          user_id: user.id,
+          category,
+          month,
+          amount: computedAmount,
+          period_type: periodType,
+          period_amount: periodAmount,
+        },
         { onConflict: "user_id,category,month" }
       )
-      .select("id, category, amount, month")
+      .select("id, category, amount, month, period_type, period_amount")
       .single();
 
     if (error) throw new Error(error.message);
@@ -142,6 +179,8 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
       category: data.category,
       amount: Number(data.amount),
       month: data.month,
+      periodType: data.period_type,
+      periodAmount: data.period_amount === null ? null : Number(data.period_amount),
     };
 
     setBudgets((prev) => {

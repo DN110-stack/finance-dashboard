@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { TransactionsProvider } from "./context/TransactionsContext";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import { BudgetsProvider } from "./context/BudgetsContext";
+import { AnnualBudgetsProvider } from "./context/AnnualBudgetsContext";
+import { SettingsProvider } from "./context/SettingsContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -45,11 +47,15 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <CategoriesProvider>
-          <TransactionsProvider>
-            <BudgetsProvider>{children}</BudgetsProvider>
-          </TransactionsProvider>
-        </CategoriesProvider>
+        <SettingsProvider>
+          <CategoriesProvider>
+            <TransactionsProvider>
+              <BudgetsProvider>
+                <AnnualBudgetsProvider>{children}</AnnualBudgetsProvider>
+              </BudgetsProvider>
+            </TransactionsProvider>
+          </CategoriesProvider>
+        </SettingsProvider>
       </body>
     </html>
   );

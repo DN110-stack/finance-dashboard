@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Receipt, Target, Wallet } from "lucide-react";
+import { LayoutDashboard, Receipt, Settings, Target, Wallet } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import SignOutButton from "./SignOutButton";
 
@@ -8,6 +8,7 @@ const navItems = [
   { label: "Transactions", href: "/transactions", icon: Receipt },
   { label: "Budget", href: "/budget", icon: Wallet },
   { label: "Goals", href: "#", icon: Target },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export default function AppShell({

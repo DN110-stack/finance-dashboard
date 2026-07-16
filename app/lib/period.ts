@@ -1,9 +1,14 @@
+import { getCurrentYearKey, getYearRange, shiftYearKey } from "./annualBudgets";
+import { settingsStore } from "./settingsStorage";
+import type { FinancialYearPreference } from "./settingsStorage";
+
 export type PeriodOption =
   | "thisMonth"
   | "lastMonth"
   | "last3Months"
   | "last6Months"
   | "thisYear"
+  | "lastYear"
   | "custom";
 
 export type PeriodState = {
@@ -24,6 +29,7 @@ export const PERIOD_OPTIONS: { value: PeriodOption; label: string }[] = [
   { value: "last3Months", label: "Last 3 Months" },
   { value: "last6Months", label: "Last 6 Months" },
   { value: "thisYear", label: "This Year" },
+  { value: "lastYear", label: "Last Year" },
   { value: "custom", label: "Custom Range" },
 ];
 
@@ -46,9 +52,20 @@ export function parseISODate(iso: string): Date {
 // "Last N Months" is a trailing window that includes the current month.
 // For "custom", returns null until both endpoints are actually filled in —
 // callers should treat that as "nothing selected yet" rather than "all time".
+//
+// `fyPreference` defaults to reading the settings store directly rather than
+// being threaded through as a required prop — getPeriodRange has 7 call
+// sites across the dashboard's charts, none of which have a settings context
+// at hand, and only 2 of the 6 period options (thisYear/lastYear) actually
+// need it. This mirrors chartLayoutStore's established precedent for a
+// non-React module reading a persisted client preference; the trade-off is
+// that this function's output becomes implicitly dependent on that global
+// state for those two options, which is fine given the codebase has no unit
+// tests today and every existing call site keeps working unchanged.
 export function getPeriodRange(
   period: PeriodState,
-  now: Date = new Date()
+  now: Date = new Date(),
+  fyPreference: FinancialYearPreference = settingsStore.getSnapshot().financialYearPreference
 ): { from: string; to: string } | null {
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -75,10 +92,9 @@ export function getPeriodRange(
         to: toISODate(new Date(year, month + 1, 0)),
       };
     case "thisYear":
-      return {
-        from: toISODate(new Date(year, 0, 1)),
-        to: toISODate(new Date(year, 11, 31)),
-      };
+      return getYearRange(getCurrentYearKey(now, fyPreference), fyPreference);
+    case "lastYear":
+      return getYearRange(shiftYearKey(getCurrentYearKey(now, fyPreference), -1), fyPreference);
     case "custom":
       if (!period.customFrom || !period.customTo) return null;
       return { from: period.customFrom, to: period.customTo };

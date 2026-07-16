@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -13,13 +13,35 @@ import {
   Plus,
   Trash2,
   TriangleAlert,
+  X,
 } from "lucide-react";
 import { useBudgets, type Budget } from "../context/BudgetsContext";
+import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
+import { useSettings } from "../context/SettingsContext";
 import { orderByParentPriority } from "../lib/categories";
-import { formatPeriodLabel, getMonthRange } from "../lib/period";
+import { formatMonthLabel, formatPeriodLabel, getMonthRange } from "../lib/period";
 import { calculatePace, getCurrentMonthKey, progressBarColour, shiftMonthKey } from "../lib/budgets";
+import { getYearKeyForMonth } from "../lib/annualBudgets";
+import {
+  ADD_BUDGET_PERIOD_TYPES,
+  getWeekBounds,
+  isMonthApplicable,
+  nextDueDate,
+  PERIOD_NOUN,
+  PERIOD_TYPE_LABELS,
+  upcomingApplicableMonths,
+  weeksInMonth,
+  type PeriodType,
+} from "../lib/budgetPeriods";
+import { sortCardItems, SORT_OPTIONS, type SortOption } from "../lib/budgetSort";
+import {
+  buildTransactionsHref,
+  CATEGORIES_FILTER_PREFIX,
+  CATEGORY_FILTER_PREFIX,
+} from "../transactions/TransactionFilters";
+import DrillDownPanel, { type DrillDownData } from "../components/charts/DrillDownPanel";
 import Sparkline from "./Sparkline";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -40,6 +62,16 @@ type CardItem = {
   amount: number;
   spent: number;
   percent: number;
+  // Single-kind only — groups stay plain-monthly, so these are always
+  // undefined for a "group" item.
+  periodType?: PeriodType;
+  periodAmount?: number | null;
+  // The underlying budget's own anchor month ("YYYY-MM") — distinct from
+  // the currently-viewed monthKey once a recurring budget is shown on a
+  // later applicable month. Edits must target this month, not monthKey,
+  // or they'd create a second, conflicting anchor row instead of updating
+  // the original.
+  anchorMonth?: string;
 };
 
 export default function BudgetManager() {
@@ -53,14 +85,19 @@ export default function BudgetManager() {
     updateBudgetGroupAmount,
     deleteBudgetGroup,
   } = useBudgets();
+  const { annualBudgets } = useAnnualBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
   const { transactions } = useTransactions();
+  const { financialYearPreference: fyPreference } = useSettings();
+  const isLoading = budgetsLoading || categoriesLoading;
 
   const [monthKey, setMonthKey] = useState(() => getCurrentMonthKey());
+  const [sortOption, setSortOption] = useState<SortOption>("percentDesc");
 
   const [isAdding, setIsAdding] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>("single");
   const [newCategoryId, setNewCategoryId] = useState("");
+  const [newPeriodType, setNewPeriodType] = useState<PeriodType>("monthly");
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupCategoryIds, setNewGroupCategoryIds] = useState<string[]>([]);
   const [newAmount, setNewAmount] = useState("");
@@ -75,6 +112,15 @@ export default function BudgetManager() {
   const [isCopying, setIsCopying] = useState(false);
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
+  const [carryForwardNotice, setCarryForwardNotice] = useState<{
+    month: string;
+    fromLabel: string;
+  } | null>(null);
+  // Months already checked for carry-forward this session — keyed on
+  // monthKey change (navigation), not on every budgets/groups mutation, so
+  // deleting a carried-forward budget doesn't get silently re-created.
+  const carryForwardChecked = useRef<Set<string>>(new Set());
 
   // Progress bars animate in from 0 whenever the visible month's data
   // changes, rather than snapping straight to their target width.
@@ -87,6 +133,22 @@ export default function BudgetManager() {
 
   const monthRange = useMemo(() => getMonthRange(monthKey), [monthKey]);
   const isCurrentMonth = monthKey === getCurrentMonthKey();
+
+  // Annual budget amount, divided by 12, per category/group name — for the
+  // "Annual: $X/mo implied" comparison badge. Keyed by name rather than id
+  // since a monthly budget and an annual budget for the same category are
+  // unrelated rows that just happen to share a category/group name.
+  const impliedMonthlyByName = useMemo(() => {
+    const year = getYearKeyForMonth(monthKey, fyPreference);
+    const map = new Map<string, number>();
+    for (const b of annualBudgets) {
+      if (b.year !== year) continue;
+      const name = b.isGroup ? b.groupName : b.category;
+      if (!name) continue;
+      map.set(name.toLowerCase(), b.amount / 12);
+    }
+    return map;
+  }, [annualBudgets, monthKey, fyPreference]);
   const lastMonthKey = useMemo(() => shiftMonthKey(monthKey, -1), [monthKey]);
   // The three months (oldest to newest) shown in each card's trend sparkline.
   const sparklineMonths = useMemo(
@@ -140,7 +202,7 @@ export default function BudgetManager() {
   const budgetByCategory = useMemo(() => {
     const map = new Map<string, Budget>();
     for (const b of budgets) {
-      if (b.month === monthKey) map.set(b.category.toLowerCase(), b);
+      if (isMonthApplicable(b.month, b.periodType, monthKey)) map.set(b.category.toLowerCase(), b);
     }
     return map;
   }, [budgets, monthKey]);
@@ -168,17 +230,91 @@ export default function BudgetManager() {
     [orderedCategories, claimedCategoryNames]
   );
 
+  // Recurring (non-monthly) budgets already auto-apply going forward on
+  // their own cycle, independent of carry-forward/copy — so they don't
+  // count toward "does last month have budgets to copy" here.
   const lastMonthHasBudgets = useMemo(
     () =>
-      budgets.some((b) => b.month === lastMonthKey) ||
+      budgets.some((b) => b.periodType === "monthly" && b.month === lastMonthKey) ||
       budgetGroups.some((g) => g.month === lastMonthKey),
     [budgets, budgetGroups, lastMonthKey]
   );
+
+  // Silently carries budgets forward from the most recent earlier month that
+  // had any, whenever navigation lands on a month with none of its own.
+  // Runs once per monthKey (the `carryForwardChecked` guard, not the effect's
+  // dependency array, is what prevents it firing again after this same month
+  // later goes back to empty because the user deleted what got carried in).
+  useEffect(() => {
+    if (isLoading) return;
+    if (carryForwardChecked.current.has(monthKey)) return;
+    carryForwardChecked.current.add(monthKey);
+
+    // Only plain-monthly budgets count toward "does this month already have
+    // its own budgets" — a recurring budget applicable here (but anchored
+    // elsewhere) doesn't mean the user has filled in this month's other
+    // categories yet.
+    const hasOwnBudgets =
+      budgets.some((b) => b.periodType === "monthly" && b.month === monthKey) ||
+      budgetGroups.some((g) => g.month === monthKey);
+    if (hasOwnBudgets) return;
+
+    const priorMonths = new Set<string>();
+    for (const b of budgets) {
+      if (b.periodType === "monthly" && b.month < monthKey) priorMonths.add(b.month);
+    }
+    for (const g of budgetGroups) {
+      if (g.month < monthKey) priorMonths.add(g.month);
+    }
+    if (priorMonths.size === 0) return;
+    const sourceMonth = [...priorMonths].sort().at(-1)!;
+
+    // Recurring budgets are excluded here too — they already auto-apply via
+    // isMonthApplicable, so copying one forward would create a second,
+    // conflicting anchor row rather than a useful duplicate.
+    const sourceBudgets = budgets.filter((b) => b.periodType === "monthly" && b.month === sourceMonth);
+    const sourceGroups = budgetGroups.filter((g) => g.month === sourceMonth);
+    const targetMonth = monthKey;
+
+    (async () => {
+      try {
+        for (const target of sourceBudgets) {
+          await upsertBudget(target.category, targetMonth, target.amount);
+        }
+        for (const target of sourceGroups) {
+          await addBudgetGroup(target.name, targetMonth, target.amount, target.categories);
+        }
+        setCarryForwardNotice({
+          month: targetMonth,
+          fromLabel: formatPeriodLabel(getMonthRange(sourceMonth)),
+        });
+      } catch {
+        // Silent by design — carry-forward is a background convenience, so a
+        // failure just leaves the month empty for the user to fill in by hand.
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [monthKey, isLoading]);
 
   function spentForCategories(cardCategories: Category[], month: string): number {
     const catMap = spentByCategoryByMonth.get(month);
     if (!catMap) return 0;
     return cardCategories.reduce((sum, c) => sum + (catMap.get(c.name.toLowerCase()) ?? 0), 0);
+  }
+
+  // Actual spend for arbitrary (non-month-aligned) date ranges — used by the
+  // weekly period's "this week" figure and per-week breakdown, where the
+  // range doesn't line up with spentByCategoryByMonth's month buckets.
+  function spentInRange(cardCategories: Category[], range: { from: string; to: string }): number {
+    const categoryNames = new Set(cardCategories.map((c) => c.name.toLowerCase()));
+    let total = 0;
+    for (const t of transactions) {
+      if (t.amount >= 0 || t.isOneOff) continue;
+      if (t.date < range.from || t.date > range.to) continue;
+      if (!categoryNames.has(t.category.toLowerCase())) continue;
+      total += Math.abs(t.amount);
+    }
+    return total;
   }
 
   // Single budgets and groups normalized into one sortable, renderable list.
@@ -199,6 +335,9 @@ export default function BudgetManager() {
         amount: budget.amount,
         spent,
         percent: budget.amount > 0 ? (spent / budget.amount) * 100 : 0,
+        periodType: budget.periodType,
+        periodAmount: budget.periodAmount,
+        anchorMonth: budget.month,
       });
     }
 
@@ -218,9 +357,17 @@ export default function BudgetManager() {
       });
     }
 
-    return items.sort((a, b) => b.percent - a.percent);
+    return sortCardItems(items, sortOption);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedCategories, budgetByCategory, spentByCategory, thisMonthGroups, categoryByName, monthKey]);
+  }, [
+    orderedCategories,
+    budgetByCategory,
+    spentByCategory,
+    thisMonthGroups,
+    categoryByName,
+    monthKey,
+    sortOption,
+  ]);
 
   const totals = useMemo(() => {
     let budgeted = 0;
@@ -246,6 +393,7 @@ export default function BudgetManager() {
     setIsAdding(true);
     setAddMode("single");
     setNewCategoryId(availableCategories[0]?.id ?? "");
+    setNewPeriodType("monthly");
     setNewGroupName("");
     setNewGroupCategoryIds([]);
     setNewAmount("");
@@ -256,6 +404,7 @@ export default function BudgetManager() {
     setIsAdding(false);
     setAddMode("single");
     setNewCategoryId("");
+    setNewPeriodType("monthly");
     setNewGroupName("");
     setNewGroupCategoryIds([]);
     setNewAmount("");
@@ -297,6 +446,36 @@ export default function BudgetManager() {
     });
   }
 
+  // Matches the same set of transactions the card's "spent" figure is built
+  // from (spentForCategories/spentByCategory) — negative, non-one-off amounts
+  // in the visible month — so the drill-down total lines up with the card.
+  function openDrillDown(item: CardItem) {
+    const categoryNames = new Set(item.categories.map((c) => c.name.toLowerCase()));
+    const matches = transactions.filter(
+      (t) =>
+        !t.isOneOff &&
+        t.amount < 0 &&
+        t.date >= monthRange.from &&
+        t.date <= monthRange.to &&
+        categoryNames.has(t.category.toLowerCase())
+    );
+
+    const categoryFilter =
+      item.kind === "single"
+        ? `${CATEGORY_FILTER_PREFIX}${item.categories[0].name}`
+        : `${CATEGORIES_FILTER_PREFIX}${item.categories.map((c) => c.name).join(",")}`;
+
+    setDrillDown({
+      title: `${item.name} — ${formatPeriodLabel(monthRange)}`,
+      transactions: matches,
+      href: buildTransactionsHref({
+        category: categoryFilter,
+        dateFrom: monthRange.from,
+        dateTo: monthRange.to,
+      }),
+    });
+  }
+
   async function handleAddSubmit(event: React.FormEvent) {
     event.preventDefault();
     setAddError(null);
@@ -316,7 +495,14 @@ export default function BudgetManager() {
 
       setIsSavingNew(true);
       try {
-        await upsertBudget(category.name, monthKey, amount);
+        if (newPeriodType === "monthly") {
+          await upsertBudget(category.name, monthKey, amount);
+        } else {
+          await upsertBudget(category.name, monthKey, amount, {
+            type: newPeriodType,
+            periodAmount: amount,
+          });
+        }
         handleCancelAdd();
       } catch (err) {
         setAddError(err instanceof Error ? err.message : "Failed to save budget");
@@ -356,7 +542,11 @@ export default function BudgetManager() {
 
   function handleStartEdit(item: CardItem) {
     setEditingId(item.id);
-    setEditAmount(String(item.amount));
+    // For a recurring budget, edit the raw per-period figure the user
+    // originally entered, not the derived monthly-equivalent.
+    const prefillAmount =
+      item.periodType && item.periodType !== "monthly" ? (item.periodAmount ?? item.amount) : item.amount;
+    setEditAmount(String(prefillAmount));
     clearActionError(item.id);
   }
 
@@ -376,7 +566,22 @@ export default function BudgetManager() {
     clearActionError(item.id);
     try {
       if (item.kind === "single") {
-        await upsertBudget(item.name, monthKey, amount);
+        // Must target the budget's own anchor month, not the currently-
+        // viewed monthKey — a recurring budget can be shown on a later
+        // applicable month, and upserting against that month would create a
+        // second, conflicting anchor row instead of updating this one. Must
+        // also resubmit the item's own period info whenever it isn't plain
+        // monthly, or the edit would silently downgrade it and destroy its
+        // recurrence.
+        const targetMonth = item.anchorMonth ?? monthKey;
+        if (item.periodType && item.periodType !== "monthly") {
+          await upsertBudget(item.name, targetMonth, amount, {
+            type: item.periodType,
+            periodAmount: amount,
+          });
+        } else {
+          await upsertBudget(item.name, targetMonth, amount);
+        }
       } else {
         await updateBudgetGroupAmount(item.id, amount);
       }
@@ -416,7 +621,10 @@ export default function BudgetManager() {
   // or a group) are left untouched rather than clobbered or duplicated.
   async function handleCopyFromLastMonth() {
     const singleTargets = budgets.filter(
-      (b) => b.month === lastMonthKey && !claimedCategoryNames.has(b.category.toLowerCase())
+      (b) =>
+        b.periodType === "monthly" &&
+        b.month === lastMonthKey &&
+        !claimedCategoryNames.has(b.category.toLowerCase())
     );
     const groupTargets = budgetGroups.filter(
       (g) =>
@@ -445,10 +653,10 @@ export default function BudgetManager() {
     }
   }
 
-  const isLoading = budgetsLoading || categoriesLoading;
   const showEmptyState = !isLoading && cardItems.length === 0 && !isAdding;
 
   return (
+    <>
     <div className="mt-6 flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
@@ -475,6 +683,18 @@ export default function BudgetManager() {
 
         {!isAdding && !showEmptyState && (
           <div className="flex items-center gap-2">
+            <select
+              value={sortOption}
+              onChange={(e) => setSortOption(e.target.value as SortOption)}
+              aria-label="Sort budgets"
+              className="rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+            >
+              {SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
             {lastMonthHasBudgets && (
               <button
                 type="button"
@@ -500,6 +720,20 @@ export default function BudgetManager() {
           </div>
         )}
       </div>
+
+      {carryForwardNotice && carryForwardNotice.month === monthKey && (
+        <div className="flex items-center justify-between gap-3 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400">
+          <span>Budgets carried forward from {carryForwardNotice.fromLabel}</span>
+          <button
+            type="button"
+            onClick={() => setCarryForwardNotice(null)}
+            aria-label="Dismiss"
+            className="rounded-md p-1 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {!isLoading && monthlyIncome > 0 && unbudgeted > 0 && (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -564,8 +798,26 @@ export default function BudgetManager() {
                   </div>
 
                   <div className="flex flex-col gap-1">
+                    <label htmlFor="new-budget-period-type" className="text-sm font-medium">
+                      Period
+                    </label>
+                    <select
+                      id="new-budget-period-type"
+                      value={newPeriodType}
+                      onChange={(e) => setNewPeriodType(e.target.value as PeriodType)}
+                      className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                    >
+                      {ADD_BUDGET_PERIOD_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {PERIOD_TYPE_LABELS[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
                     <label htmlFor="new-budget-amount" className="text-sm font-medium">
-                      Amount
+                      {newPeriodType === "monthly" ? "Amount" : `Amount per ${PERIOD_NOUN[newPeriodType]}`}
                     </label>
                     <input
                       id="new-budget-amount"
@@ -737,11 +989,30 @@ export default function BudgetManager() {
                     const remaining = effectiveAmount - item.spent;
                     const pace = isCurrentMonth ? calculatePace(item.spent, item.amount, monthKey) : null;
                     const sparklineValues = sparklineMonths.map((m) => spentForCategories(item.categories, m));
+                    const impliedMonthly = impliedMonthlyByName.get(item.name.toLowerCase());
+                    const isWeekly = item.periodType === "weekly";
+                    const isMultiMonthPeriod =
+                      item.periodType === "bi-monthly" ||
+                      item.periodType === "quarterly" ||
+                      item.periodType === "bi-annual";
+                    const weekSpend = isWeekly ? spentInRange(item.categories, getWeekBounds()) : 0;
+                    const applicableMonths = isMultiMonthPeriod
+                      ? upcomingApplicableMonths(item.anchorMonth ?? monthKey, item.periodType!, monthKey, 3)
+                      : [];
+                    const nextDue = isMultiMonthPeriod
+                      ? nextDueDate(item.anchorMonth ?? monthKey, item.periodType!)
+                      : null;
+                    const isExpandable = item.kind === "group" || isWeekly;
 
                     return (
                       <div
                         key={item.id}
-                        className="rounded-lg border border-black/10 p-4 dark:border-white/10"
+                        onClick={() => !isEditing && openDrillDown(item)}
+                        className={`rounded-lg border border-black/10 p-4 dark:border-white/10 ${
+                          isEditing
+                            ? ""
+                            : "cursor-pointer transition-colors hover:border-black/20 dark:hover:border-white/20"
+                        }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
@@ -768,10 +1039,21 @@ export default function BudgetManager() {
                               />
                             )}
                             <span className="font-medium">{item.name}</span>
-                            {item.kind === "group" && (
+                            {impliedMonthly !== undefined && (
+                              <span
+                                title="Annual budget for this category, divided by 12"
+                                className="rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-white/10 dark:text-zinc-400"
+                              >
+                                Annual: {currencyFormatter.format(impliedMonthly)}/mo implied
+                              </span>
+                            )}
+                            {isExpandable && (
                               <button
                                 type="button"
-                                onClick={() => toggleExpanded(item.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpanded(item.id);
+                                }}
                                 aria-label={isExpanded ? `Collapse ${item.name}` : `Expand ${item.name}`}
                                 aria-expanded={isExpanded}
                                 className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
@@ -792,7 +1074,10 @@ export default function BudgetManager() {
                               <div className="flex items-center gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => handleStartEdit(item)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartEdit(item);
+                                  }}
                                   aria-label={`Edit budget for ${item.name}`}
                                   className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
                                 >
@@ -800,7 +1085,10 @@ export default function BudgetManager() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDelete(item)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(item);
+                                  }}
                                   disabled={deletingId === item.id}
                                   aria-label={`Delete budget for ${item.name}`}
                                   className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
@@ -816,7 +1104,9 @@ export default function BudgetManager() {
                           <div className="mt-3 flex flex-wrap items-end gap-3">
                             <div className="flex flex-col gap-1">
                               <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                                Amount
+                                {item.periodType && item.periodType !== "monthly"
+                                  ? `Amount per ${PERIOD_NOUN[item.periodType]}`
+                                  : "Amount"}
                               </label>
                               <input
                                 type="number"
@@ -894,8 +1184,33 @@ export default function BudgetManager() {
                                     {pace === "atRisk" ? "At risk" : "On track"}
                                   </span>
                                 )}
+
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openDrillDown(item);
+                                  }}
+                                  className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                                >
+                                  View transactions
+                                </button>
                               </div>
                             </div>
+
+                            {isWeekly && (
+                              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                This week: {currencyFormatter.format(weekSpend)} of{" "}
+                                {currencyFormatter.format(item.periodAmount ?? 0)}
+                              </p>
+                            )}
+
+                            {isMultiMonthPeriod && (
+                              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                                Applies to: {applicableMonths.map((m) => formatMonthLabel(m)).join(", ")}
+                                {nextDue && <> · Next due: {formatMonthLabel(nextDue)}</>}
+                              </p>
+                            )}
                           </>
                         )}
 
@@ -931,6 +1246,22 @@ export default function BudgetManager() {
                           </div>
                         )}
 
+                        {isWeekly && isExpanded && (
+                          <div className="mt-3 flex flex-col gap-1.5 border-t border-black/10 pt-3 dark:border-white/10">
+                            {weeksInMonth(monthKey).map((week, index) => (
+                              <div key={index} className="flex items-center justify-between gap-2 text-sm">
+                                <span className="text-zinc-700 dark:text-zinc-300">
+                                  {formatPeriodLabel(week)}
+                                </span>
+                                <span className="text-zinc-500 dark:text-zinc-400">
+                                  {currencyFormatter.format(spentInRange(item.categories, week))} of{" "}
+                                  {currencyFormatter.format(item.periodAmount ?? 0)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
                         {actionErrors[item.id] && (
                           <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                             {actionErrors[item.id]}
@@ -946,5 +1277,8 @@ export default function BudgetManager() {
         </>
       )}
     </div>
+
+    {drillDown && <DrillDownPanel data={drillDown} onClose={() => setDrillDown(null)} />}
+    </>
   );
 }

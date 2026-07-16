@@ -15,6 +15,7 @@ import { useBudgets } from "../../context/BudgetsContext";
 import { useTransactions } from "../../context/TransactionsContext";
 import { orderByParentPriority } from "../../lib/categories";
 import { filterTransactionsByPeriod, getPeriodRange, type PeriodState } from "../../lib/period";
+import { isMonthApplicable } from "../../lib/budgetPeriods";
 import EmptyChartState from "./EmptyChartState";
 
 // Validated (dataviz skill categorical-palette checks, light + dark surfaces)
@@ -24,8 +25,7 @@ import EmptyChartState from "./EmptyChartState";
 const BUDGET_COLOR = "#2a78d6";
 const ACTUAL_COLOR = "#eb6834";
 
-// Every "YYYY-MM" key that overlaps the [from, to] range, inclusive — budgets
-// are monthly, so a multi-month period sums every month it touches.
+// Every "YYYY-MM" key that overlaps the [from, to] range, inclusive.
 function monthsInRange(from: string, to: string): string[] {
   const months: string[] = [];
   let [year, month] = from.slice(0, 7).split("-").map(Number);
@@ -51,12 +51,20 @@ export default function BudgetVsActualChart({ period }: { period: PeriodState })
     const range = getPeriodRange(period);
     if (!range) return [];
 
-    const months = new Set(monthsInRange(range.from, range.to));
+    const months = monthsInRange(range.from, range.to);
 
+    // `budget.amount` is always the monthly-equivalent (raw for plain
+    // monthly rows, prorated from period_amount for recurring ones — see
+    // budgetPeriods.ts), so a budget just needs counting once per month in
+    // range that it's applicable to. For a plain monthly budget this is
+    // exactly the old "budget.month === m" behavior; a quarterly budget
+    // instead contributes in the ~2 of every 6 months it actually recurs in.
     const budgetTotals = new Map<string, number>();
     for (const budget of budgets) {
-      if (!months.has(budget.month)) continue;
-      budgetTotals.set(budget.category, (budgetTotals.get(budget.category) ?? 0) + budget.amount);
+      for (const m of months) {
+        if (!isMonthApplicable(budget.month, budget.periodType, m)) continue;
+        budgetTotals.set(budget.category, (budgetTotals.get(budget.category) ?? 0) + budget.amount);
+      }
     }
 
     const periodTransactions = filterTransactionsByPeriod(

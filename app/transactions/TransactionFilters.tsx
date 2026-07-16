@@ -13,6 +13,10 @@ export type OneOffFilterValue = "" | "hide" | "only";
 // they resolve to different filtering logic in TransactionsTable.
 export const PARENT_FILTER_PREFIX = "parent:";
 export const CATEGORY_FILTER_PREFIX = "category:";
+// An arbitrary, comma-separated set of exact category names — used by budget
+// group drill-downs, whose category set doesn't necessarily line up with any
+// single parent group.
+export const CATEGORIES_FILTER_PREFIX = "categories:";
 
 export type TransactionFilterState = {
   search: string;
