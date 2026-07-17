@@ -60,14 +60,14 @@ export default function SettingsForm() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Choose how the app groups and labels years.
         </p>
-        <div className="mt-3 flex w-fit rounded-md border border-black/10 p-0.5 dark:border-white/10">
+        <div className="mt-3 flex w-fit flex-wrap rounded-md border border-black/10 p-0.5 dark:border-white/10">
           {FY_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => handleFyChange(option.value)}
               disabled={isSavingFY}
-              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+              className={`min-h-[44px] rounded px-3 text-sm font-medium transition-colors disabled:opacity-50 ${
                 financialYearPreference === option.value
                   ? "bg-blue-600 text-white"
                   : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
@@ -92,14 +92,14 @@ export default function SettingsForm() {
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
           Which tab the Budget page opens on.
         </p>
-        <div className="mt-3 flex w-fit rounded-md border border-black/10 p-0.5 dark:border-white/10">
+        <div className="mt-3 flex w-fit flex-wrap rounded-md border border-black/10 p-0.5 dark:border-white/10">
           {VIEW_OPTIONS.map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => handleViewChange(option.value)}
               disabled={isSavingView}
-              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${
+              className={`min-h-[44px] rounded px-3 text-sm font-medium transition-colors disabled:opacity-50 ${
                 defaultBudgetView === option.value
                   ? "bg-blue-600 text-white"
                   : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"

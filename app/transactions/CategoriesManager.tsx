@@ -412,7 +412,7 @@ export default function CategoriesManager() {
                                   type="button"
                                   onClick={() => startEdit(category)}
                                   aria-label={`Edit ${category.name}`}
-                                  className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
                                 >
                                   <Pencil className="h-4 w-4" />
                                 </button>
@@ -421,7 +421,7 @@ export default function CategoriesManager() {
                                   onClick={() => handleDelete(category.id)}
                                   disabled={deletingId === category.id}
                                   aria-label={`Delete ${category.name}`}
-                                  className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
@@ -20,6 +20,7 @@ import TransactionFilters, {
   PARENT_FILTER_PREFIX,
   type TransactionFilterState,
 } from "./TransactionFilters";
+import { TableRowsSkeleton } from "../components/Skeleton";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -52,6 +53,9 @@ export default function TransactionsTable() {
     {}
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Which rows have their (mobile-only, hidden-by-default) description
+  // revealed — keyed the same way as each row's React key.
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [togglingOneOffIds, setTogglingOneOffIds] = useState<Set<string>>(new Set());
@@ -212,6 +216,15 @@ export default function TransactionsTable() {
     });
   }
 
+  function toggleRowExpanded(key: string) {
+    setExpandedRowKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   async function handleDeleteOne(transaction: Transaction) {
     if (!transaction.id) return;
     const confirmed = window.confirm(
@@ -364,7 +377,7 @@ export default function TransactionsTable() {
               type="button"
               onClick={handleDeleteSelected}
               disabled={isBulkDeleting}
-              className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400"
+              className="flex min-h-[44px] items-center gap-1.5 rounded-md border border-red-200 px-3 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:border-red-500/30 dark:text-red-400"
             >
               <Trash2 className="h-4 w-4" />
               {isBulkDeleting ? "Deleting…" : `Delete selected (${selectedIds.size})`}
@@ -381,7 +394,7 @@ export default function TransactionsTable() {
             type="button"
             onClick={handleUploadClick}
             disabled={isUploading || categoriesLoading}
-            className="rounded-md border border-black/10 px-3 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            className="min-h-[44px] rounded-md border border-black/10 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
             {isUploading
               ? "Uploading…"
@@ -407,10 +420,10 @@ export default function TransactionsTable() {
       />
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-        <table className="w-full min-w-[480px] text-left text-sm">
+        <table className="w-full min-w-0 text-left text-sm sm:min-w-[480px]">
           <thead className="bg-black/5 dark:bg-white/5">
             <tr>
-              <th className="w-10 px-4 py-3">
+              <th className="w-10 px-2 py-3 sm:px-4">
                 <input
                   ref={selectAllRef}
                   type="checkbox"
@@ -421,7 +434,7 @@ export default function TransactionsTable() {
                   className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
                 />
               </th>
-              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-2 py-3 sm:px-4 font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("date")}
@@ -431,7 +444,7 @@ export default function TransactionsTable() {
                   {sortColumn === "date" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="hidden px-2 py-3 sm:px-4 font-medium text-zinc-500 sm:table-cell dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("description")}
@@ -441,7 +454,7 @@ export default function TransactionsTable() {
                   {sortColumn === "description" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-2 py-3 sm:px-4 font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("category")}
@@ -451,7 +464,7 @@ export default function TransactionsTable() {
                   {sortColumn === "category" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-2 py-3 sm:px-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("amount")}
@@ -461,13 +474,14 @@ export default function TransactionsTable() {
                   {sortColumn === "amount" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-4 py-3 text-center font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-2 py-3 sm:px-4 text-center font-medium text-zinc-500 dark:text-zinc-400">
                 One-off
               </th>
-              <th className="w-10 px-4 py-3" />
+              <th className="w-10 px-2 py-3 sm:px-4" />
             </tr>
           </thead>
           <tbody className="divide-y divide-black/10 dark:divide-white/10">
+            {isLoading && <TableRowsSkeleton rows={8} cols={7} />}
             {!isLoading && filteredTransactions.length === 0 && transactions.length > 0 && (
               <tr>
                 <td
@@ -481,90 +495,114 @@ export default function TransactionsTable() {
             {paginatedTransactions.map((transaction, index) => {
               const id = transaction.id;
               const isDeleting = !!id && deletingIds.has(id);
+              const rowKey = `${transaction.date}-${transaction.description}-${index}`;
+              const isRowExpanded = expandedRowKeys.has(rowKey);
               return (
-                <tr
-                  key={`${transaction.date}-${transaction.description}-${index}`}
-                  className={
-                    transaction.category === UNCATEGORIZED
-                      ? "bg-amber-50 dark:bg-amber-500/10"
-                      : undefined
-                  }
-                >
-                  <td className="px-4 py-3 align-top">
-                    <input
-                      type="checkbox"
-                      checked={!!id && selectedIds.has(id)}
-                      onChange={() => id && toggleRow(id)}
-                      disabled={!id}
-                      aria-label={`Select ${transaction.description}`}
-                      className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
-                    />
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
-                    {transaction.date}
-                  </td>
-                  <td className="px-4 py-3 font-medium">
-                    <div className="flex items-center gap-2">
-                      {transaction.description}
-                      {transaction.isOneOff && (
-                        <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-500/10 dark:text-slate-400">
-                          One-off
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <CategoryCell transaction={transaction} />
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
-                      transaction.amount < 0
-                        ? "text-zinc-900 dark:text-zinc-100"
-                        : "text-emerald-600 dark:text-emerald-400"
-                    }`}
+                <Fragment key={rowKey}>
+                  <tr
+                    className={
+                      transaction.category === UNCATEGORIZED
+                        ? "bg-amber-50 dark:bg-amber-500/10"
+                        : undefined
+                    }
                   >
-                    {transaction.amount < 0 ? "-" : "+"}
-                    {currencyFormatter.format(Math.abs(transaction.amount))}
-                  </td>
-                  <td className="px-4 py-3 text-center align-top">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleOneOff(transaction)}
-                      disabled={!id || togglingOneOffIds.has(id)}
-                      aria-pressed={!!transaction.isOneOff}
-                      aria-label={
-                        transaction.isOneOff
-                          ? `Unmark ${transaction.description} as one-off`
-                          : `Mark ${transaction.description} as one-off`
-                      }
-                      title={
-                        transaction.isOneOff
-                          ? "One-off transaction — click to unmark"
-                          : "Mark as one-off (excluded from dashboard totals)"
-                      }
-                      className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-                        transaction.isOneOff ? "bg-amber-500" : "bg-black/10 dark:bg-white/15"
+                    <td className="px-2 py-3 sm:px-4 align-top">
+                      <input
+                        type="checkbox"
+                        checked={!!id && selectedIds.has(id)}
+                        onChange={() => id && toggleRow(id)}
+                        disabled={!id}
+                        aria-label={`Select ${transaction.description}`}
+                        className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
+                      />
+                    </td>
+                    <td className="px-2 py-3 sm:px-4 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
+                      <button
+                        type="button"
+                        onClick={() => toggleRowExpanded(rowKey)}
+                        aria-expanded={isRowExpanded}
+                        aria-label={isRowExpanded ? "Hide description" : "Show description"}
+                        className="-my-2 flex min-h-[44px] items-center gap-1 sm:hidden"
+                      >
+                        {transaction.date}
+                        <SortIcon direction={isRowExpanded ? "asc" : "desc"} />
+                      </button>
+                      <span className="hidden sm:inline">{transaction.date}</span>
+                    </td>
+                    <td className="hidden px-2 py-3 sm:px-4 font-medium sm:table-cell">
+                      <div className="flex items-center gap-2">
+                        {transaction.description}
+                        {transaction.isOneOff && (
+                          <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-500/10 dark:text-slate-400">
+                            One-off
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-2 py-3 sm:px-4 align-top">
+                      <CategoryCell transaction={transaction} />
+                    </td>
+                    <td
+                      className={`px-2 py-3 sm:px-4 text-right font-medium whitespace-nowrap ${
+                        transaction.amount < 0
+                          ? "text-zinc-900 dark:text-zinc-100"
+                          : "text-emerald-600 dark:text-emerald-400"
                       }`}
                     >
-                      <span
-                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                          transaction.isOneOff ? "translate-x-3.5" : "translate-x-0.5"
-                        }`}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 align-top">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteOne(transaction)}
-                      disabled={!id || isDeleting}
-                      aria-label={`Delete ${transaction.description}`}
-                      className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </td>
-                </tr>
+                      {transaction.amount < 0 ? "-" : "+"}
+                      {currencyFormatter.format(Math.abs(transaction.amount))}
+                    </td>
+                    <td className="px-2 py-3 sm:px-4 text-center align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleOneOff(transaction)}
+                        disabled={!id || togglingOneOffIds.has(id)}
+                        aria-pressed={!!transaction.isOneOff}
+                        aria-label={
+                          transaction.isOneOff
+                            ? `Unmark ${transaction.description} as one-off`
+                            : `Mark ${transaction.description} as one-off`
+                        }
+                        title={
+                          transaction.isOneOff
+                            ? "One-off transaction — click to unmark"
+                            : "Mark as one-off (excluded from dashboard totals)"
+                        }
+                        className="flex h-11 w-7 shrink-0 items-center justify-center disabled:opacity-50"
+                      >
+                        <span
+                          className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                            transaction.isOneOff ? "bg-amber-500" : "bg-black/10 dark:bg-white/15"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                              transaction.isOneOff ? "translate-x-3.5" : "translate-x-0.5"
+                            }`}
+                          />
+                        </span>
+                      </button>
+                    </td>
+                    <td className="px-2 py-3 sm:px-4 align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOne(transaction)}
+                        disabled={!id || isDeleting}
+                        aria-label={`Delete ${transaction.description}`}
+                        className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                  {isRowExpanded && (
+                    <tr className="sm:hidden">
+                      <td colSpan={7} className="px-4 pt-0 pb-3 text-sm text-zinc-700 dark:text-zinc-300">
+                        {transaction.description}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -572,7 +610,7 @@ export default function TransactionsTable() {
       </div>
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
+        <div className="hidden flex-wrap items-center gap-3 text-sm text-zinc-500 sm:flex dark:text-zinc-400">
           <span>
             {totalItems === 0
               ? "No transactions"
@@ -597,16 +635,22 @@ export default function TransactionsTable() {
           </label>
         </div>
 
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex items-center justify-between gap-2 text-sm sm:justify-start">
           <button
             type="button"
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={currentPage <= 1}
-            className="rounded-md border border-black/10 px-3 py-1.5 font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            className="min-h-[44px] rounded-md border border-black/10 px-3 font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
             Previous
           </button>
-          <div className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+
+          {/* Mobile: plain page count, no jump-to-page input. */}
+          <span className="text-zinc-500 sm:hidden dark:text-zinc-400">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <div className="hidden items-center gap-1.5 text-zinc-500 sm:flex dark:text-zinc-400">
             Page
             <input
               type="number"
@@ -627,11 +671,12 @@ export default function TransactionsTable() {
             />
             of {totalPages}
           </div>
+
           <button
             type="button"
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage >= totalPages}
-            className="rounded-md border border-black/10 px-3 py-1.5 font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+            className="min-h-[44px] rounded-md border border-black/10 px-3 font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
           >
             Next
           </button>

@@ -4,7 +4,7 @@ import TransactionsTabs from "./TransactionsTabs";
 
 export default function Transactions() {
   return (
-    <AppShell active="Transactions">
+    <AppShell active="Transactions" enablePullToRefresh>
       <h1 className="text-2xl font-semibold">Transactions</h1>
       <Suspense>
         <TransactionsTabs />

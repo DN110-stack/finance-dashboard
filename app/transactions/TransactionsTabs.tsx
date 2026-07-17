@@ -21,16 +21,16 @@ export default function TransactionsTabs() {
 
   return (
     <>
-      <div className="mt-4 flex gap-1 border-b border-black/10 dark:border-white/10">
+      <div className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:gap-1 sm:overflow-visible sm:border-b sm:border-black/10 sm:px-0 sm:pb-0 sm:dark:border-white/10">
         {TABS.map((tab) => (
           <button
             key={tab}
             type="button"
             onClick={() => setActiveTab(tab)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+            className={`min-h-[44px] shrink-0 rounded-full border px-4 text-sm font-medium transition-colors sm:min-h-0 sm:-mb-px sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-3 sm:py-2 ${
               activeTab === tab
-                ? "border-zinc-900 text-zinc-900 dark:border-white dark:text-white"
-                : "border-transparent text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white"
+                ? "border-blue-600 bg-blue-600 text-white sm:border-zinc-900 sm:bg-transparent sm:text-zinc-900 sm:dark:border-white sm:dark:text-white"
+                : "border-black/10 text-zinc-700 hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10 sm:border-transparent sm:text-zinc-500 sm:hover:bg-transparent sm:hover:text-zinc-900 sm:dark:hover:bg-transparent sm:dark:hover:text-white"
             }`}
           >
             {tab}

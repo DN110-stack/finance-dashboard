@@ -136,7 +136,7 @@ export default function BudgetCard({
               }}
               aria-label={expandAriaLabel}
               aria-expanded={isExpanded}
-              className="shrink-0 rounded-md p-1 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
             >
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </button>
@@ -152,7 +152,7 @@ export default function BudgetCard({
                 onStartEdit();
               }}
               aria-label={editAriaLabel}
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
             >
               <Pencil className="h-4 w-4" />
             </button>
@@ -164,7 +164,7 @@ export default function BudgetCard({
               }}
               disabled={isDeleting}
               aria-label={deleteAriaLabel}
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
             >
               <Trash2 className="h-4 w-4" />
             </button>
@@ -193,7 +193,7 @@ export default function BudgetCard({
               type="button"
               onClick={onSaveEdit}
               disabled={isSavingEdit || !editAmount.trim()}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+              className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
             >
               {isSavingEdit ? "Saving…" : "Save"}
             </button>

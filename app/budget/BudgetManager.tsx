@@ -29,6 +29,7 @@ import {
   CATEGORY_FILTER_PREFIX,
 } from "../transactions/TransactionFilters";
 import DrillDownPanel, { type DrillDownData } from "../components/charts/DrillDownPanel";
+import { BudgetCardsSkeleton } from "../components/Skeleton";
 import BudgetCard from "./BudgetCard";
 import BudgetSummaryRow from "./BudgetSummaryRow";
 import FloatingAddButton from "./FloatingAddButton";
@@ -658,7 +659,7 @@ export default function BudgetManager() {
               type="button"
               onClick={() => setMonthKey((prev) => shiftMonthKey(prev, -1))}
               aria-label="Previous month"
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
@@ -669,7 +670,7 @@ export default function BudgetManager() {
               type="button"
               onClick={() => setMonthKey((prev) => shiftMonthKey(prev, 1))}
               aria-label="Next month"
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
             >
               <ChevronRight className="h-5 w-5" />
             </button>
@@ -681,7 +682,7 @@ export default function BudgetManager() {
                 value={sortOption}
                 onChange={(e) => setSortOption(e.target.value as SortOption)}
                 aria-label="Sort budgets"
-                className="rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                className="min-h-[44px] rounded-md border border-black/10 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
               >
                 {SORT_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -694,7 +695,7 @@ export default function BudgetManager() {
                   type="button"
                   onClick={handleCopyFromLastMonth}
                   disabled={isCopying}
-                  className="flex items-center gap-1.5 rounded-md border border-black/10 px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-md border border-black/10 px-3 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
                 >
                   <Copy className="h-4 w-4" />
                   {isCopying ? "Copying…" : "Copy from last month"}
@@ -733,23 +734,28 @@ export default function BudgetManager() {
         )}
 
         {isLoading ? (
-          <p className="rounded-lg border border-black/10 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
-            Loading budgets…
-          </p>
+          <BudgetCardsSkeleton />
         ) : (
           <>
             {isAdding && (
-              <form
-                onSubmit={handleAddSubmit}
-                className="flex flex-col gap-3 rounded-lg border border-black/10 p-4 dark:border-white/10"
-              >
+              <>
+                {/* Mobile-only backdrop — the form itself becomes a bottom
+                    sheet below sm:, and stays inline above it. */}
+                <div
+                  className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+                  onClick={handleCancelAdd}
+                />
+                <form
+                  onSubmit={handleAddSubmit}
+                  className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col gap-3 overflow-y-auto rounded-t-2xl border-t border-black/10 bg-background p-4 pb-[env(safe-area-inset-bottom)] shadow-xl sm:static sm:z-auto sm:max-h-none sm:overflow-visible sm:rounded-lg sm:border sm:shadow-none dark:border-white/10"
+                >
                 <div className="flex rounded-md border border-black/10 p-0.5 dark:border-white/10 w-fit">
                   {(["single", "group"] as const).map((mode) => (
                     <button
                       key={mode}
                       type="button"
                       onClick={() => setAddMode(mode)}
-                      className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                      className={`min-h-[44px] rounded px-3 text-sm font-medium transition-colors ${
                         addMode === mode
                           ? "bg-blue-600 text-white"
                           : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
@@ -817,7 +823,7 @@ export default function BudgetManager() {
                     <button
                       type="submit"
                       disabled={isSavingNew || !newCategoryId || !newAmount.trim()}
-                      className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                      className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                     >
                       {isSavingNew ? "Saving…" : "Save"}
                     </button>
@@ -898,7 +904,7 @@ export default function BudgetManager() {
                       <button
                         type="submit"
                         disabled={isSavingNew || !newGroupName.trim() || newGroupCategoryIds.length === 0}
-                        className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                        className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                       >
                         {isSavingNew ? "Saving…" : "Save"}
                       </button>
@@ -915,7 +921,8 @@ export default function BudgetManager() {
                 )}
 
                 {addError && <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>}
-              </form>
+                </form>
+              </>
             )}
 
             {showEmptyState ? (
@@ -931,7 +938,7 @@ export default function BudgetManager() {
                 <button
                   type="button"
                   onClick={handleOpenAdd}
-                  className="mt-1 flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+                  className="mt-1 flex min-h-[44px] items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   <Plus className="h-4 w-4" />
                   Add budget

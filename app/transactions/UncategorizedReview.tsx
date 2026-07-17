@@ -171,8 +171,8 @@ export default function UncategorizedReview({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-black/10 bg-background p-6 dark:border-white/10">
-        <div className="flex items-center justify-between gap-3">
+      <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg border border-black/10 bg-background p-4 sm:p-6 dark:border-white/10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">
             Review {pending.length} uncategorised transaction{pending.length === 1 ? "" : "s"}
           </h2>
@@ -182,7 +182,7 @@ export default function UncategorizedReview({
                 type="button"
                 onClick={handleAcceptAll}
                 disabled={acceptingAll || busyId !== null}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
               >
                 <CheckCheck className="h-4 w-4" />
                 {acceptingAll ? "Accepting…" : "Accept all suggestions"}
@@ -192,7 +192,7 @@ export default function UncategorizedReview({
               type="button"
               onClick={onClose}
               disabled={acceptingAll}
-              className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
+              className="flex min-h-[44px] items-center text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
             >
               Close
             </button>
@@ -312,7 +312,7 @@ export default function UncategorizedReview({
                     type="button"
                     onClick={() => handleAssign(transaction)}
                     disabled={busyId === id || !selection || acceptingAll}
-                    className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                    className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                   >
                     {busyId === id ? "Saving…" : "Assign"}
                   </button>

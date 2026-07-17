@@ -87,7 +87,7 @@ export default function ChatPanel() {
 
   return (
     <div className="mt-6 rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
           <h2 className="text-lg font-semibold">Ask about your transactions</h2>
@@ -96,7 +96,7 @@ export default function ChatPanel() {
           type="button"
           onClick={() => askQuestion(ROAST_PROMPT, "roast")}
           disabled={isStreaming}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1.5 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 disabled:opacity-50 dark:text-orange-400"
+          className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 text-sm font-medium text-orange-600 transition-colors hover:bg-orange-500/20 disabled:opacity-50 dark:text-orange-400"
         >
           <Flame className="h-4 w-4" />
           Roast my spending 🔥
@@ -153,12 +153,12 @@ export default function ChatPanel() {
           onChange={(event) => setInput(event.target.value)}
           placeholder="Ask a question about your spending…"
           disabled={isStreaming}
-          className="flex-1 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:opacity-60 dark:border-white/10"
+          className="min-h-[44px] flex-1 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 disabled:opacity-60 dark:border-white/10"
         />
         <button
           type="submit"
           disabled={isStreaming || !input.trim()}
-          className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          className="flex min-h-[44px] items-center gap-2 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           Send

@@ -95,7 +95,7 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
           value={currentCategory?.id ?? ""}
           onChange={handleChange}
           disabled={isSaving}
-          className="rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:opacity-50 dark:border-white/10"
+          className="w-full min-h-[36px] rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:opacity-50 sm:w-auto dark:border-white/10"
         >
           {!currentCategory && (
             <option value="" disabled>

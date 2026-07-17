@@ -90,7 +90,7 @@ export default function UploadHistory() {
               onClick={() => handleDelete(batch.id, batch.sourceBank, batch.transactionCount)}
               disabled={deletingId === batch.id}
               aria-label={`Delete ${batch.sourceBank} upload`}
-              className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
             >
               <Trash2 className="h-4 w-4" />
             </button>

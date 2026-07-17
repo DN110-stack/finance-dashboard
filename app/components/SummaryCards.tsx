@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Landmark, PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
 import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
+import { SummaryCardsSkeleton } from "./Skeleton";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -11,7 +12,7 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 });
 
 export default function SummaryCards({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions, isLoading } = useTransactions();
 
   const { savings, monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
     // One-off transactions are excluded from every dashboard calculation —
@@ -62,23 +63,27 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
     },
   ];
 
+  if (isLoading) return <SummaryCardsSkeleton />;
+
   return (
-    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
       {cards.map((card) => {
         const Icon = card.icon;
         return (
           <div
             key={card.label}
-            className="flex items-center gap-4 rounded-lg border border-black/10 p-4 transition-shadow hover:shadow-sm dark:border-white/10"
+            className="flex items-center gap-3 rounded-lg border border-black/10 p-3 transition-shadow hover:shadow-sm sm:gap-4 sm:p-4 dark:border-white/10"
           >
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${card.iconClass}`}>
-              <Icon className="h-5 w-5" />
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full sm:h-10 sm:w-10 ${card.iconClass}`}
+            >
+              <Icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            <div className="min-w-0">
+              <p className="truncate text-xs text-zinc-500 sm:text-sm dark:text-zinc-400">
                 {card.label}
               </p>
-              <p className="mt-1 text-2xl font-semibold">{card.value}</p>
+              <p className="mt-1 truncate text-lg font-semibold sm:text-2xl">{card.value}</p>
             </div>
           </div>
         );

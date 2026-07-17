@@ -1,10 +1,12 @@
 "use client";
 
-import { X } from "lucide-react";
+import { useState } from "react";
+import { ListFilter, X } from "lucide-react";
 import type { BankFormat } from "../lib/csv";
 import type { Category } from "../context/CategoriesContext";
 import { groupCategoriesByParent, UNGROUPED } from "../lib/categories";
 import { UNCATEGORIZED } from "../lib/rules";
+import BottomSheet from "../components/BottomSheet";
 
 export type OneOffFilterValue = "" | "hide" | "only";
 
@@ -108,6 +110,7 @@ export default function TransactionFilters({
   categories,
   availableBanks,
 }: Props) {
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const activeCount = countActiveTransactionFilters(filters);
   const groups = groupCategoriesByParent(categories);
   const parentGroups = groups.filter((g) => g.parent !== UNGROUPED);
@@ -117,30 +120,8 @@ export default function TransactionFilters({
     onChange({ ...filters, [key]: value });
   }
 
-  return (
-    <div className="mt-4 rounded-lg border border-black/10 p-4 dark:border-white/10">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Filters</h2>
-          {activeCount > 0 && (
-            <span className="inline-flex items-center justify-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-white/10 dark:text-zinc-300">
-              {activeCount} active
-            </span>
-          )}
-        </div>
-        {activeCount > 0 && (
-          <button
-            type="button"
-            onClick={() => onChange(EMPTY_TRANSACTION_FILTERS)}
-            className="flex items-center gap-1 text-sm font-medium text-zinc-500 transition-colors hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
-          >
-            <X className="h-3.5 w-3.5" />
-            Clear all filters
-          </button>
-        )}
-      </div>
-
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+  const fields = (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className={labelClasses}>Search</label>
           <input
@@ -271,6 +252,57 @@ export default function TransactionFilters({
           </select>
         </div>
       </div>
-    </div>
+  );
+
+  const clearButton = activeCount > 0 && (
+    <button
+      type="button"
+      onClick={() => onChange(EMPTY_TRANSACTION_FILTERS)}
+      className="flex items-center gap-1 text-sm font-medium text-zinc-500 transition-colors hover:text-red-600 dark:text-zinc-400 dark:hover:text-red-400"
+    >
+      <X className="h-3.5 w-3.5" />
+      Clear all filters
+    </button>
+  );
+
+  return (
+    <>
+      {/* Mobile: a "Filter" button opens the field set in a bottom sheet. */}
+      <button
+        type="button"
+        onClick={() => setIsSheetOpen(true)}
+        className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-black/10 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 sm:hidden dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+      >
+        <ListFilter className="h-4 w-4" />
+        Filter
+        {activeCount > 0 && (
+          <span className="inline-flex items-center justify-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-white/10 dark:text-zinc-300">
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      <BottomSheet title="Filters" open={isSheetOpen} onClose={() => setIsSheetOpen(false)}>
+        {fields}
+        {clearButton && <div className="mt-3">{clearButton}</div>}
+      </BottomSheet>
+
+      {/* Desktop: the field set stays inline. */}
+      <div className="mt-4 hidden rounded-lg border border-black/10 p-4 sm:block dark:border-white/10">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Filters</h2>
+            {activeCount > 0 && (
+              <span className="inline-flex items-center justify-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-white/10 dark:text-zinc-300">
+                {activeCount} active
+              </span>
+            )}
+          </div>
+          {clearButton}
+        </div>
+
+        <div className="mt-3">{fields}</div>
+      </div>
+    </>
   );
 }

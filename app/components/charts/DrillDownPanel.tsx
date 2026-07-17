@@ -1,6 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import type { Transaction } from "../../lib/csv";
@@ -16,39 +15,6 @@ export type DrillDownData = {
   href: string;
 };
 
-const panelStyle: CSSProperties = {
-  position: "fixed",
-  top: 0,
-  right: 0,
-  width: "480px",
-  height: "100vh",
-  display: "flex",
-  flexDirection: "column",
-  backgroundColor: "white",
-  zIndex: 50,
-  boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
-};
-
-const headerStyle: CSSProperties = {
-  flexShrink: 0,
-  padding: "24px",
-  borderBottom: "1px solid #e5e7eb",
-  backgroundColor: "white",
-};
-
-const scrollStyle: CSSProperties = {
-  flex: 1,
-  overflowY: "auto",
-  padding: "0 24px",
-};
-
-const footerStyle: CSSProperties = {
-  flexShrink: 0,
-  padding: "16px 24px",
-  borderTop: "1px solid #e5e7eb",
-  backgroundColor: "white",
-};
-
 export default function DrillDownPanel({
   data,
   onClose,
@@ -60,8 +26,11 @@ export default function DrillDownPanel({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
-      <div style={panelStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={headerStyle} className="flex items-center justify-between gap-3">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="fixed inset-0 z-50 flex flex-col bg-white pb-[env(safe-area-inset-bottom)] sm:inset-y-0 sm:top-0 sm:right-0 sm:left-auto sm:bottom-auto sm:h-screen sm:w-[480px] sm:pb-0 sm:shadow-[-4px_0_24px_rgba(0,0,0,0.12)]"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 bg-white p-4 sm:p-6">
           <div>
             <h2 className="text-lg font-semibold text-zinc-900">{data.title}</h2>
             <p className="mt-0.5 text-sm text-zinc-500">
@@ -72,13 +41,13 @@ export default function DrillDownPanel({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-black/5"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div style={scrollStyle}>
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6">
           <div className="py-4">
             <div className="rounded-lg border border-zinc-200">
               <table className="w-full text-left text-sm">
@@ -103,10 +72,12 @@ export default function DrillDownPanel({
                         <td className="px-3 py-2 whitespace-nowrap text-zinc-500">
                           {transaction.date}
                         </td>
-                        <td className="px-3 py-2 font-medium text-zinc-900">
+                        <td className="max-w-[9rem] truncate px-3 py-2 font-medium text-zinc-900 sm:max-w-none">
                           {transaction.description}
                         </td>
-                        <td className="px-3 py-2 text-zinc-900">{transaction.category}</td>
+                        <td className="max-w-[6rem] truncate px-3 py-2 text-zinc-900 sm:max-w-none">
+                          {transaction.category}
+                        </td>
                         <td
                           className={`px-3 py-2 text-right font-medium whitespace-nowrap ${
                             transaction.amount < 0 ? "text-zinc-900" : "text-emerald-600"
@@ -124,13 +95,13 @@ export default function DrillDownPanel({
           </div>
         </div>
 
-        <div style={footerStyle} className="flex items-center justify-between gap-3">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-zinc-200 bg-white p-4 sm:px-6 sm:py-4">
           <p className="text-sm font-semibold text-zinc-900">
             Total: {currencyFormatter.format(total)}
           </p>
           <Link
             href={data.href}
-            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+            className="flex min-h-[44px] items-center rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             View in Transactions
           </Link>
