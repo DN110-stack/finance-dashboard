@@ -1,6 +1,6 @@
 "use client";
 
-import { Info } from "lucide-react";
+import { ChevronDown, Info } from "lucide-react";
 import { useTransactions } from "../../context/TransactionsContext";
 import { ALL_CHART_TYPES, type ChartType } from "../../lib/chartLayout";
 import type { PeriodState } from "../../lib/period";
@@ -27,25 +27,25 @@ export default function ChartSlot({ value, onChange, period, isDuplicate }: Prop
           : "border-black/10 dark:border-white/10"
       }`}
     >
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1.5">
-          <h2 className="text-lg font-semibold">{definition.label}</h2>
-          <span title={definition.description}>
-            <Info className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
-          </span>
+      <div className="flex items-start justify-between gap-2">
+        <div className="relative inline-flex min-w-0 items-center">
+          <select
+            value={value}
+            onChange={(e) => onChange(e.target.value as ChartType)}
+            aria-label="Chart type"
+            className="min-h-[44px] max-w-full appearance-none truncate rounded-md border border-transparent bg-transparent py-1 -ml-1 pl-1 pr-6 text-base font-semibold text-zinc-900 outline-none transition-colors hover:border-black/10 focus:border-black/20 sm:min-h-0 sm:text-lg dark:text-white dark:hover:border-white/10 dark:focus:border-white/20"
+          >
+            {ALL_CHART_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {CHART_DEFINITIONS[type].label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-4 w-4 -translate-y-1/2 shrink-0 text-zinc-400 dark:text-zinc-500" />
         </div>
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value as ChartType)}
-          aria-label="Chart type"
-          className="w-full min-h-[44px] rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm focus:border-black/20 focus:outline-none sm:w-auto sm:min-h-0 sm:py-1 dark:border-white/10 dark:focus:border-white/20"
-        >
-          {ALL_CHART_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {CHART_DEFINITIONS[type].label}
-            </option>
-          ))}
-        </select>
+        <span title={definition.description} className="shrink-0 pt-2.5">
+          <Info className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+        </span>
       </div>
 
       {isDuplicate && (

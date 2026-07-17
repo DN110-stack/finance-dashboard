@@ -420,10 +420,10 @@ export default function TransactionsTable() {
       />
 
       <div className="mt-4 overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-        <table className="w-full min-w-0 text-left text-sm sm:min-w-[480px]">
+        <table className="w-full table-fixed text-left text-sm sm:min-w-[480px] sm:table-auto">
           <thead className="bg-black/5 dark:bg-white/5">
             <tr>
-              <th className="w-10 px-2 py-3 sm:px-4">
+              <th className="w-8 px-2 py-3 sm:w-10 sm:px-4">
                 <input
                   ref={selectAllRef}
                   type="checkbox"
@@ -434,7 +434,7 @@ export default function TransactionsTable() {
                   className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
                 />
               </th>
-              <th className="px-2 py-3 sm:px-4 font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="w-24 px-2 py-3 font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("date")}
@@ -464,7 +464,7 @@ export default function TransactionsTable() {
                   {sortColumn === "category" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-2 py-3 sm:px-4 text-right font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="w-24 px-2 py-3 text-right font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("amount")}
@@ -474,7 +474,7 @@ export default function TransactionsTable() {
                   {sortColumn === "amount" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-2 py-3 sm:px-4 text-center font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="w-16 px-2 py-3 text-center font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
                 One-off
               </th>
               <th className="w-10 px-2 py-3 sm:px-4" />

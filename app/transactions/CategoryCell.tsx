@@ -89,13 +89,13 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="flex min-w-0 items-center gap-2">
         <select
           value={currentCategory?.id ?? ""}
           onChange={handleChange}
           disabled={isSaving}
-          className="w-full min-h-[36px] rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:opacity-50 sm:w-auto dark:border-white/10"
+          className="min-h-[44px] w-full min-w-0 truncate rounded-md border border-black/10 bg-transparent px-2 py-1 text-sm outline-none focus:border-blue-500 disabled:opacity-50 sm:w-auto dark:border-white/10"
         >
           {!currentCategory && (
             <option value="" disabled>

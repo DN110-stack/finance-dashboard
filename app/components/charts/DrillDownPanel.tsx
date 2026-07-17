@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
 import type { Transaction } from "../../lib/csv";
@@ -23,6 +24,18 @@ export default function DrillDownPanel({
   onClose: () => void;
 }) {
   const total = data.transactions.reduce((sum, t) => sum + t.amount, 0);
+  // Which rows have their (mobile-only, truncated-by-default) description
+  // expanded to full text — tapping the cell toggles it.
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(key: string) {
+    setExpandedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
@@ -50,13 +63,17 @@ export default function DrillDownPanel({
         <div className="flex-1 overflow-y-auto px-4 sm:px-6">
           <div className="py-4">
             <div className="rounded-lg border border-zinc-200">
-              <table className="w-full text-left text-sm">
+              <table className="w-full table-fixed text-left text-sm sm:table-auto">
                 <thead className="sticky top-0 bg-zinc-50">
                   <tr>
-                    <th className="px-3 py-2 font-medium text-zinc-500">Date</th>
+                    <th className="w-16 px-3 py-2 font-medium text-zinc-500 sm:w-auto">Date</th>
                     <th className="px-3 py-2 font-medium text-zinc-500">Description</th>
-                    <th className="px-3 py-2 font-medium text-zinc-500">Category</th>
-                    <th className="px-3 py-2 text-right font-medium text-zinc-500">Amount</th>
+                    <th className="hidden px-3 py-2 font-medium text-zinc-500 sm:table-cell">
+                      Category
+                    </th>
+                    <th className="w-20 px-3 py-2 text-right font-medium text-zinc-500 sm:w-auto">
+                      Amount
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-200">
@@ -67,27 +84,36 @@ export default function DrillDownPanel({
                       </td>
                     </tr>
                   ) : (
-                    data.transactions.map((transaction, index) => (
-                      <tr key={transaction.id ?? index}>
-                        <td className="px-3 py-2 whitespace-nowrap text-zinc-500">
-                          {transaction.date}
-                        </td>
-                        <td className="max-w-[9rem] truncate px-3 py-2 font-medium text-zinc-900 sm:max-w-none">
-                          {transaction.description}
-                        </td>
-                        <td className="max-w-[6rem] truncate px-3 py-2 text-zinc-900 sm:max-w-none">
-                          {transaction.category}
-                        </td>
-                        <td
-                          className={`px-3 py-2 text-right font-medium whitespace-nowrap ${
-                            transaction.amount < 0 ? "text-zinc-900" : "text-emerald-600"
-                          }`}
-                        >
-                          {transaction.amount < 0 ? "-" : "+"}
-                          {currencyFormatter.format(Math.abs(transaction.amount))}
-                        </td>
-                      </tr>
-                    ))
+                    data.transactions.map((transaction, index) => {
+                      const key = String(transaction.id ?? index);
+                      const isExpanded = expandedKeys.has(key);
+                      return (
+                        <tr key={key}>
+                          <td className="px-3 py-2 whitespace-nowrap text-zinc-500">
+                            {transaction.date}
+                          </td>
+                          <td
+                            onClick={() => toggleExpanded(key)}
+                            className={`px-3 py-2 font-medium text-zinc-900 sm:cursor-default sm:overflow-visible sm:text-clip sm:whitespace-normal ${
+                              isExpanded ? "whitespace-normal break-words" : "cursor-pointer truncate"
+                            }`}
+                          >
+                            {transaction.description}
+                          </td>
+                          <td className="hidden px-3 py-2 text-zinc-900 sm:table-cell">
+                            {transaction.category}
+                          </td>
+                          <td
+                            className={`px-3 py-2 text-right font-medium whitespace-nowrap ${
+                              transaction.amount < 0 ? "text-zinc-900" : "text-emerald-600"
+                            }`}
+                          >
+                            {transaction.amount < 0 ? "-" : "+"}
+                            {currencyFormatter.format(Math.abs(transaction.amount))}
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
