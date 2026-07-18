@@ -6,6 +6,7 @@ import SummaryCards from "./SummaryCards";
 import ChatPanel from "./ChatPanel";
 import PeriodSelector from "./PeriodSelector";
 import ChartSlot from "./charts/ChartSlot";
+import GoalsWidget from "./GoalsWidget";
 import { DEFAULT_PERIOD, getPeriodRange, type PeriodState } from "../lib/period";
 import { chartLayoutStore, type ChartLayout, type ChartType } from "../lib/chartLayout";
 
@@ -65,6 +66,8 @@ export default function DashboardContent() {
           />
         ))}
       </div>
+
+      <GoalsWidget />
 
       <ChatPanel />
     </>

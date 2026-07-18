@@ -53,3 +53,18 @@ body {
     transform: scale(1);
   }
 }
+
+/* Goal completion confetti — each piece falls from the top of its card and
+   fades out near the bottom, with per-piece rotation/drift set inline via
+   custom properties (see ConfettiBurst.tsx) so every piece follows a
+   slightly different path instead of falling in visible lockstep. */
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, -10%) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--fall-drift), 340%) rotate(var(--fall-rotation));
+  }
+}

@@ -4,6 +4,7 @@ import { TransactionsProvider } from "./context/TransactionsContext";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import { BudgetsProvider } from "./context/BudgetsContext";
 import { AnnualBudgetsProvider } from "./context/AnnualBudgetsContext";
+import { GoalsProvider } from "./context/GoalsContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import "./globals.css";
 
@@ -51,7 +52,9 @@ export default function RootLayout({
           <CategoriesProvider>
             <TransactionsProvider>
               <BudgetsProvider>
-                <AnnualBudgetsProvider>{children}</AnnualBudgetsProvider>
+                <AnnualBudgetsProvider>
+                  <GoalsProvider>{children}</GoalsProvider>
+                </AnnualBudgetsProvider>
               </BudgetsProvider>
             </TransactionsProvider>
           </CategoriesProvider>
