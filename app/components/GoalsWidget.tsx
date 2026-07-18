@@ -39,9 +39,7 @@ export default function GoalsWidget() {
   }
 
   return (
-    <div className="mt-8">
-      <h2 className="text-lg font-semibold">Goals</h2>
-
+    <>
       {isLoading ? (
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {Array.from({ length: 2 }).map((_, index) => (
@@ -73,7 +71,7 @@ export default function GoalsWidget() {
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -124,7 +122,7 @@ function GoalSlot({
             >
               {goal.emoji}
             </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{goal.name}</span>
+            <div className="flex-1" />
             {progress.status === "completed" ? (
               <span className="flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
                 <CircleCheck className="h-3 w-3" />

@@ -90,3 +90,62 @@ export const chartLayoutStore = {
   getServerSnapshot,
   set: setChartLayout,
 };
+
+// How many of the 4 slots above are currently visible — kept as a separate
+// store from chartLayoutStore so switching the count down and back up
+// doesn't lose whatever chart type was assigned to a temporarily-hidden slot.
+export type ChartCount = 1 | 2 | 3 | 4;
+export const CHART_COUNT_OPTIONS: ChartCount[] = [1, 2, 3, 4];
+const DEFAULT_CHART_COUNT: ChartCount = 4;
+const COUNT_STORAGE_KEY = "finance-dashboard:chart-count";
+
+function isChartCount(value: unknown): value is ChartCount {
+  return typeof value === "number" && (CHART_COUNT_OPTIONS as number[]).includes(value);
+}
+
+function readCountFromStorage(): ChartCount {
+  try {
+    const raw = window.localStorage.getItem(COUNT_STORAGE_KEY);
+    if (!raw) return DEFAULT_CHART_COUNT;
+
+    const parsed = JSON.parse(raw);
+    return isChartCount(parsed) ? parsed : DEFAULT_CHART_COUNT;
+  } catch {
+    return DEFAULT_CHART_COUNT;
+  }
+}
+
+let cachedCount: ChartCount | null = null;
+const countListeners = new Set<() => void>();
+
+function getCountSnapshot(): ChartCount {
+  if (cachedCount === null) cachedCount = readCountFromStorage();
+  return cachedCount;
+}
+
+function getCountServerSnapshot(): ChartCount {
+  return DEFAULT_CHART_COUNT;
+}
+
+function subscribeToChartCount(callback: () => void) {
+  countListeners.add(callback);
+  return () => countListeners.delete(callback);
+}
+
+function setChartCount(count: ChartCount) {
+  cachedCount = count;
+  try {
+    window.localStorage.setItem(COUNT_STORAGE_KEY, JSON.stringify(count));
+  } catch {
+    // Persistence is a nice-to-have — a full quota or private-browsing
+    // restriction shouldn't surface as an error to the user.
+  }
+  countListeners.forEach((listener) => listener());
+}
+
+export const chartCountStore = {
+  subscribe: subscribeToChartCount,
+  getSnapshot: getCountSnapshot,
+  getServerSnapshot: getCountServerSnapshot,
+  set: setChartCount,
+};

@@ -1,35 +1,50 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { TriangleAlert } from "lucide-react";
 import SummaryCards from "./SummaryCards";
 import ChatPanel from "./ChatPanel";
 import PeriodSelector from "./PeriodSelector";
-import ChartSlot from "./charts/ChartSlot";
+import ChartsSection from "./ChartsSection";
+import BudgetWidget from "./BudgetWidget";
 import GoalsWidget from "./GoalsWidget";
+import DashboardSection from "./DashboardSection";
 import { DEFAULT_PERIOD, getPeriodRange, type PeriodState } from "../lib/period";
-import { chartLayoutStore, type ChartLayout, type ChartType } from "../lib/chartLayout";
+import {
+  dashboardLayoutStore,
+  moveSection,
+  reorderSections,
+  type DashboardSectionId,
+} from "../lib/dashboardLayout";
+
+const SECTION_TITLES: Record<DashboardSectionId, string> = {
+  charts: "Charts",
+  budgets: "Budget",
+  goals: "Goals",
+};
 
 export default function DashboardContent() {
   const [period, setPeriod] = useState<PeriodState>(DEFAULT_PERIOD);
-  const layout = useSyncExternalStore(
-    chartLayoutStore.subscribe,
-    chartLayoutStore.getSnapshot,
-    chartLayoutStore.getServerSnapshot
+  const order = useSyncExternalStore(
+    dashboardLayoutStore.subscribe,
+    dashboardLayoutStore.getSnapshot,
+    dashboardLayoutStore.getServerSnapshot
   );
   const isCustomIncomplete = period.option === "custom" && !getPeriodRange(period);
 
-  function updateSlot(index: number, chartType: ChartType) {
-    const next = [...layout] as ChartLayout;
-    next[index] = chartType;
-    chartLayoutStore.set(next);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  function handleDrop(targetIndex: number) {
+    if (dragIndex !== null && dragIndex !== targetIndex) {
+      dashboardLayoutStore.set(reorderSections(order, dragIndex, targetIndex));
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
   }
 
-  // A chart type appearing at more than one index counts as a duplicate at
-  // every index it occupies, not just the second occurrence.
-  const duplicateTypes = new Set(
-    layout.filter((type, index) => layout.indexOf(type) !== index)
-  );
+  function handleMove(index: number, direction: -1 | 1) {
+    dashboardLayoutStore.set(moveSection(order, index, direction));
+  }
 
   return (
     <>
@@ -44,30 +59,29 @@ export default function DashboardContent() {
 
       <SummaryCards period={period} />
 
-      {duplicateTypes.size > 0 && (
-        <p className="mt-6 flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
-          <TriangleAlert className="h-4 w-4" />
-          The same chart is selected in more than one slot below.
-        </p>
-      )}
-
-      <div
-        className={`grid grid-cols-1 gap-6 lg:grid-cols-2 ${
-          duplicateTypes.size > 0 ? "mt-2" : "mt-6"
-        }`}
-      >
-        {layout.map((chartType, index) => (
-          <ChartSlot
-            key={index}
-            value={chartType}
-            onChange={(next) => updateSlot(index, next)}
-            period={period}
-            isDuplicate={duplicateTypes.has(chartType)}
-          />
-        ))}
-      </div>
-
-      <GoalsWidget />
+      {order.map((sectionId, index) => (
+        <DashboardSection
+          key={sectionId}
+          title={SECTION_TITLES[sectionId]}
+          isDragging={dragIndex === index}
+          isDragOver={dragOverIndex === index && dragIndex !== null && dragIndex !== index}
+          onDragStartHandle={() => setDragIndex(index)}
+          onDragOver={() => setDragOverIndex(index)}
+          onDrop={() => handleDrop(index)}
+          onDragEnd={() => {
+            setDragIndex(null);
+            setDragOverIndex(null);
+          }}
+          canMoveUp={index > 0}
+          canMoveDown={index < order.length - 1}
+          onMoveUp={() => handleMove(index, -1)}
+          onMoveDown={() => handleMove(index, 1)}
+        >
+          {sectionId === "charts" && <ChartsSection period={period} />}
+          {sectionId === "budgets" && <BudgetWidget />}
+          {sectionId === "goals" && <GoalsWidget />}
+        </DashboardSection>
+      ))}
 
       <ChatPanel />
     </>
