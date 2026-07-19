@@ -1,8 +1,8 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ListFilter, Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { parseTransactionsCSV, type BankFormat, type Transaction } from "../lib/csv";
@@ -11,6 +11,7 @@ import { BANK_BADGE_STYLES } from "../lib/banks";
 import { resolveGroupName } from "../lib/categories";
 import { fetchCategorySuggestions, type CategorySuggestion } from "../lib/categorySuggestions";
 import CategoryCell from "./CategoryCell";
+import TransactionCard from "./TransactionCard";
 import UncategorizedReview from "./UncategorizedReview";
 import TransactionFilters, {
   countActiveTransactionFilters,
@@ -20,7 +21,14 @@ import TransactionFilters, {
   PARENT_FILTER_PREFIX,
   type TransactionFilterState,
 } from "./TransactionFilters";
-import { TableRowsSkeleton } from "../components/Skeleton";
+import { TableRowsSkeleton, Skeleton } from "../components/Skeleton";
+
+// How long a press has to be held before it counts as a long-press (enters
+// mobile selection mode) rather than a tap (toggles the card's expansion).
+const LONG_PRESS_MS = 500;
+// A press that moves more than this many px before the timer fires is
+// treated as a scroll, not a long-press.
+const LONG_PRESS_MOVE_CANCEL_PX = 10;
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -53,9 +61,14 @@ export default function TransactionsTable() {
     {}
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  // Which rows have their (mobile-only, hidden-by-default) description
-  // revealed — keyed the same way as each row's React key.
+  // Which cards have their (mobile-only, hidden-by-default) details row —
+  // category, one-off toggle, delete — revealed. Keyed the same way as each
+  // row's React key.
   const [expandedRowKeys, setExpandedRowKeys] = useState<Set<string>>(new Set());
+  // Mobile-only bulk-select mode, entered via long-press on a card. Desktop
+  // keeps its always-visible checkbox column and never touches this.
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [togglingOneOffIds, setTogglingOneOffIds] = useState<Set<string>>(new Set());
@@ -75,6 +88,11 @@ export default function TransactionsTable() {
   const [pageInputValue, setPageInputValue] = useState("1");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const mobileListRef = useRef<HTMLDivElement>(null);
+  const mobileSelectionBarRef = useRef<HTMLDivElement>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFiredRef = useRef(false);
+  const pressStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const availableBanks = useMemo(
     () =>
@@ -113,7 +131,8 @@ export default function TransactionsTable() {
     });
   }, [transactions, filters, categories]);
 
-  const hasActiveFilters = countActiveTransactionFilters(filters) > 0;
+  const activeFilterCount = countActiveTransactionFilters(filters);
+  const hasActiveFilters = activeFilterCount > 0;
 
   const sortedTransactions = useMemo(() => {
     const sorted = [...filteredTransactions].sort((a, b) => {
@@ -172,6 +191,23 @@ export default function TransactionsTable() {
     }
   }, [someSelected]);
 
+  // Mobile selection mode: tapping anywhere outside the card list or the
+  // "Delete selected" bar clears the selection and exits the mode.
+  useEffect(() => {
+    if (!isSelectionMode) return;
+
+    function handlePointerDownOutside(event: PointerEvent) {
+      const target = event.target as Node;
+      if (mobileListRef.current?.contains(target)) return;
+      if (mobileSelectionBarRef.current?.contains(target)) return;
+      setSelectedIds(new Set());
+      setIsSelectionMode(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDownOutside);
+    return () => document.removeEventListener("pointerdown", handlePointerDownOutside);
+  }, [isSelectionMode]);
+
   function handleUploadClick() {
     fileInputRef.current?.click();
   }
@@ -223,6 +259,65 @@ export default function TransactionsTable() {
       else next.add(key);
       return next;
     });
+  }
+
+  // Mobile-only: toggles a card's selection, and drops out of selection
+  // mode the moment the set empties out — so deselecting the last card is
+  // equivalent to tapping outside.
+  function toggleRowMobile(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      if (next.size === 0) setIsSelectionMode(false);
+      return next;
+    });
+  }
+
+  function clearLongPressTimer() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  function handleCardPointerDown(event: React.PointerEvent, id: string | undefined) {
+    pressStartRef.current = { x: event.clientX, y: event.clientY };
+    longPressFiredRef.current = false;
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true;
+      if (id) {
+        setIsSelectionMode(true);
+        setSelectedIds((prev) => new Set(prev).add(id));
+      }
+    }, LONG_PRESS_MS);
+  }
+
+  function handleCardPointerMove(event: React.PointerEvent) {
+    if (!longPressTimerRef.current || !pressStartRef.current) return;
+    const dx = event.clientX - pressStartRef.current.x;
+    const dy = event.clientY - pressStartRef.current.y;
+    if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_CANCEL_PX) clearLongPressTimer();
+  }
+
+  function handleCardPointerCancel() {
+    clearLongPressTimer();
+    pressStartRef.current = null;
+  }
+
+  function handleCardPointerUp(rowKey: string, id: string | undefined) {
+    clearLongPressTimer();
+    pressStartRef.current = null;
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false;
+      return;
+    }
+    if (isSelectionMode) {
+      if (id) toggleRowMobile(id);
+    } else {
+      toggleRowExpanded(rowKey);
+    }
   }
 
   async function handleDeleteOne(transaction: Transaction) {
@@ -288,6 +383,7 @@ export default function TransactionsTable() {
       await deleteTransactions(ids);
       const deletedIdSet = new Set(ids);
       setSelectedIds(new Set());
+      setIsSelectionMode(false);
       setReviewQueue((prev) => prev.filter((t) => !t.id || !deletedIdSet.has(t.id)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete selected transactions");
@@ -354,6 +450,14 @@ export default function TransactionsTable() {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -371,7 +475,7 @@ export default function TransactionsTable() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden items-center gap-2 sm:flex">
           {selectedIds.size > 0 && (
             <button
               type="button"
@@ -383,13 +487,6 @@ export default function TransactionsTable() {
               {isBulkDeleting ? "Deleting…" : `Delete selected (${selectedIds.size})`}
             </button>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            onChange={handleFileChange}
-            className="hidden"
-          />
           <button
             type="button"
             onClick={handleUploadClick}
@@ -405,6 +502,26 @@ export default function TransactionsTable() {
         </div>
       </div>
 
+      {/* Mobile: Filter and Upload CSV sit side by side, each half-width. */}
+      <div className="mt-3 flex gap-2 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setIsFilterSheetOpen(true)}
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-lg border border-black/10 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+        >
+          <ListFilter className="h-4 w-4" />
+          {hasActiveFilters ? `Filter (${activeFilterCount})` : "Filter"}
+        </button>
+        <button
+          type="button"
+          onClick={handleUploadClick}
+          disabled={isUploading || categoriesLoading}
+          className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-black/10 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
+        >
+          {isUploading ? "Uploading…" : categoriesLoading ? "Loading…" : "Upload CSV"}
+        </button>
+      </div>
+
       {error && (
         <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
@@ -417,13 +534,16 @@ export default function TransactionsTable() {
         onChange={setFilters}
         categories={categories}
         availableBanks={availableBanks}
+        isSheetOpen={isFilterSheetOpen}
+        onCloseSheet={() => setIsFilterSheetOpen(false)}
       />
 
-      <div className="mt-4 overflow-x-auto rounded-lg border border-black/10 dark:border-white/10">
-        <table className="w-full table-fixed text-left text-sm sm:min-w-[480px] sm:table-auto">
+      {/* Desktop: full table, always-visible checkbox column. */}
+      <div className="mt-4 hidden overflow-x-auto rounded-lg border border-black/10 sm:block dark:border-white/10">
+        <table className="w-full min-w-[480px] table-auto text-left text-sm">
           <thead className="bg-black/5 dark:bg-white/5">
             <tr>
-              <th className="w-8 px-2 py-3 sm:w-10 sm:px-4">
+              <th className="w-10 px-4 py-3">
                 <input
                   ref={selectAllRef}
                   type="checkbox"
@@ -434,7 +554,7 @@ export default function TransactionsTable() {
                   className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
                 />
               </th>
-              <th className="w-24 px-2 py-3 font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
+              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("date")}
@@ -444,7 +564,7 @@ export default function TransactionsTable() {
                   {sortColumn === "date" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="hidden px-2 py-3 sm:px-4 font-medium text-zinc-500 sm:table-cell dark:text-zinc-400">
+              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("description")}
@@ -454,7 +574,7 @@ export default function TransactionsTable() {
                   {sortColumn === "description" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="px-2 py-3 sm:px-4 font-medium text-zinc-500 dark:text-zinc-400">
+              <th className="px-4 py-3 font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("category")}
@@ -464,7 +584,7 @@ export default function TransactionsTable() {
                   {sortColumn === "category" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="w-24 px-2 py-3 text-right font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
+              <th className="px-4 py-3 text-right font-medium text-zinc-500 dark:text-zinc-400">
                 <button
                   type="button"
                   onClick={() => handleSort("amount")}
@@ -474,10 +594,10 @@ export default function TransactionsTable() {
                   {sortColumn === "amount" && <SortIcon direction={sortDirection} />}
                 </button>
               </th>
-              <th className="w-16 px-2 py-3 text-center font-medium text-zinc-500 sm:w-auto sm:px-4 dark:text-zinc-400">
+              <th className="px-4 py-3 text-center font-medium text-zinc-500 dark:text-zinc-400">
                 One-off
               </th>
-              <th className="w-10 px-2 py-3 sm:px-4" />
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-black/10 dark:divide-white/10">
@@ -496,118 +616,155 @@ export default function TransactionsTable() {
               const id = transaction.id;
               const isDeleting = !!id && deletingIds.has(id);
               const rowKey = `${transaction.date}-${transaction.description}-${index}`;
-              const isRowExpanded = expandedRowKeys.has(rowKey);
               return (
-                <Fragment key={rowKey}>
-                  <tr
-                    className={
-                      transaction.category === UNCATEGORIZED
-                        ? "bg-amber-50 dark:bg-amber-500/10"
-                        : undefined
-                    }
+                <tr
+                  key={rowKey}
+                  className={
+                    transaction.category === UNCATEGORIZED
+                      ? "bg-amber-50 dark:bg-amber-500/10"
+                      : undefined
+                  }
+                >
+                  <td className="px-4 py-3 align-top">
+                    <input
+                      type="checkbox"
+                      checked={!!id && selectedIds.has(id)}
+                      onChange={() => id && toggleRow(id)}
+                      disabled={!id}
+                      aria-label={`Select ${transaction.description}`}
+                      className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
+                    />
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
+                    {transaction.date}
+                  </td>
+                  <td className="px-4 py-3 font-medium">
+                    <div className="flex items-center gap-2">
+                      {transaction.description}
+                      {transaction.isOneOff && (
+                        <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-500/10 dark:text-slate-400">
+                          One-off
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <CategoryCell transaction={transaction} />
+                  </td>
+                  <td
+                    className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
+                      transaction.amount < 0
+                        ? "text-zinc-900 dark:text-zinc-100"
+                        : "text-emerald-600 dark:text-emerald-400"
+                    }`}
                   >
-                    <td className="px-2 py-3 sm:px-4 align-top">
-                      <input
-                        type="checkbox"
-                        checked={!!id && selectedIds.has(id)}
-                        onChange={() => id && toggleRow(id)}
-                        disabled={!id}
-                        aria-label={`Select ${transaction.description}`}
-                        className="h-4 w-4 cursor-pointer rounded border-black/20 dark:border-white/20"
-                      />
-                    </td>
-                    <td className="px-2 py-3 sm:px-4 whitespace-nowrap text-zinc-500 dark:text-zinc-400">
-                      <button
-                        type="button"
-                        onClick={() => toggleRowExpanded(rowKey)}
-                        aria-expanded={isRowExpanded}
-                        aria-label={isRowExpanded ? "Hide description" : "Show description"}
-                        className="-my-2 flex min-h-[44px] items-center gap-1 sm:hidden"
-                      >
-                        {transaction.date}
-                        <SortIcon direction={isRowExpanded ? "asc" : "desc"} />
-                      </button>
-                      <span className="hidden sm:inline">{transaction.date}</span>
-                    </td>
-                    <td className="hidden px-2 py-3 sm:px-4 font-medium sm:table-cell">
-                      <div className="flex items-center gap-2">
-                        {transaction.description}
-                        {transaction.isOneOff && (
-                          <span className="inline-flex shrink-0 items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:bg-slate-500/10 dark:text-slate-400">
-                            One-off
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-2 py-3 sm:px-4 align-top">
-                      <CategoryCell transaction={transaction} />
-                    </td>
-                    <td
-                      className={`px-2 py-3 sm:px-4 text-right font-medium whitespace-nowrap ${
-                        transaction.amount < 0
-                          ? "text-zinc-900 dark:text-zinc-100"
-                          : "text-emerald-600 dark:text-emerald-400"
-                      }`}
+                    {transaction.amount < 0 ? "-" : "+"}
+                    {currencyFormatter.format(Math.abs(transaction.amount))}
+                  </td>
+                  <td className="px-4 py-3 text-center align-top">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleOneOff(transaction)}
+                      disabled={!id || togglingOneOffIds.has(id)}
+                      aria-pressed={!!transaction.isOneOff}
+                      aria-label={
+                        transaction.isOneOff
+                          ? `Unmark ${transaction.description} as one-off`
+                          : `Mark ${transaction.description} as one-off`
+                      }
+                      title={
+                        transaction.isOneOff
+                          ? "One-off transaction — click to unmark"
+                          : "Mark as one-off (excluded from dashboard totals)"
+                      }
+                      className="flex h-11 w-7 shrink-0 items-center justify-center disabled:opacity-50"
                     >
-                      {transaction.amount < 0 ? "-" : "+"}
-                      {currencyFormatter.format(Math.abs(transaction.amount))}
-                    </td>
-                    <td className="px-2 py-3 sm:px-4 text-center align-top">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleOneOff(transaction)}
-                        disabled={!id || togglingOneOffIds.has(id)}
-                        aria-pressed={!!transaction.isOneOff}
-                        aria-label={
-                          transaction.isOneOff
-                            ? `Unmark ${transaction.description} as one-off`
-                            : `Mark ${transaction.description} as one-off`
-                        }
-                        title={
-                          transaction.isOneOff
-                            ? "One-off transaction — click to unmark"
-                            : "Mark as one-off (excluded from dashboard totals)"
-                        }
-                        className="flex h-11 w-7 shrink-0 items-center justify-center disabled:opacity-50"
+                      <span
+                        className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
+                          transaction.isOneOff ? "bg-amber-500" : "bg-black/10 dark:bg-white/15"
+                        }`}
                       >
                         <span
-                          className={`relative inline-flex h-4 w-7 shrink-0 items-center rounded-full transition-colors ${
-                            transaction.isOneOff ? "bg-amber-500" : "bg-black/10 dark:bg-white/15"
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            transaction.isOneOff ? "translate-x-3.5" : "translate-x-0.5"
                           }`}
-                        >
-                          <span
-                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                              transaction.isOneOff ? "translate-x-3.5" : "translate-x-0.5"
-                            }`}
-                          />
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-2 py-3 sm:px-4 align-top">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteOne(transaction)}
-                        disabled={!id || isDeleting}
-                        aria-label={`Delete ${transaction.description}`}
-                        className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                  {isRowExpanded && (
-                    <tr className="sm:hidden">
-                      <td colSpan={7} className="px-4 pt-0 pb-3 text-sm text-zinc-700 dark:text-zinc-300">
-                        {transaction.description}
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
+                        />
+                      </span>
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 align-top">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteOne(transaction)}
+                      disabled={!id || isDeleting}
+                      aria-label={`Delete ${transaction.description}`}
+                      className="flex h-11 w-11 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:opacity-50 dark:text-zinc-400 dark:hover:text-red-400"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </td>
+                </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+
+      {/* Mobile: card list — long-press a card to enter bulk-select mode,
+          tap a card to expand its category/one-off/delete controls. */}
+      <div ref={mobileListRef} className="mt-4 flex flex-col gap-2 sm:hidden">
+        {isLoading &&
+          Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-[70px] rounded-lg" />
+          ))}
+        {!isLoading && filteredTransactions.length === 0 && transactions.length > 0 && (
+          <p className="py-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
+            No transactions match your filters.
+          </p>
+        )}
+        {!isLoading &&
+          paginatedTransactions.map((transaction, index) => {
+            const id = transaction.id;
+            const rowKey = `${transaction.date}-${transaction.description}-${index}`;
+            return (
+              <TransactionCard
+                key={rowKey}
+                transaction={transaction}
+                isExpanded={expandedRowKeys.has(rowKey)}
+                isSelectionMode={isSelectionMode}
+                isSelected={!!id && selectedIds.has(id)}
+                isDeleting={!!id && deletingIds.has(id)}
+                isTogglingOneOff={!!id && togglingOneOffIds.has(id)}
+                onPointerDown={(event) => handleCardPointerDown(event, id)}
+                onPointerMove={handleCardPointerMove}
+                onPointerUp={() => handleCardPointerUp(rowKey, id)}
+                onPointerCancel={handleCardPointerCancel}
+                onDelete={() => handleDeleteOne(transaction)}
+                onToggleOneOff={() => handleToggleOneOff(transaction)}
+              />
+            );
+          })}
+      </div>
+
+      {isSelectionMode && selectedIds.size > 0 && (
+        <div
+          ref={mobileSelectionBarRef}
+          className="fixed inset-x-0 bottom-14 z-40 flex items-center justify-between gap-3 border-t border-black/10 bg-background p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_12px_rgba(0,0,0,0.08)] sm:hidden dark:border-white/10"
+        >
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            {selectedIds.size} selected
+          </span>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={isBulkDeleting}
+            className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-red-600 px-4 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+          >
+            <Trash2 className="h-4 w-4" />
+            {isBulkDeleting ? "Deleting…" : `Delete selected (${selectedIds.size})`}
+          </button>
+        </div>
+      )}
 
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="hidden flex-wrap items-center gap-3 text-sm text-zinc-500 sm:flex dark:text-zinc-400">

@@ -25,6 +25,7 @@ import {
 } from "../transactions/TransactionFilters";
 import DrillDownPanel, { type DrillDownData } from "../components/charts/DrillDownPanel";
 import { BudgetCardsSkeleton } from "../components/Skeleton";
+import BottomSheet from "../components/BottomSheet";
 import BudgetCard from "./BudgetCard";
 import FloatingAddButton from "./FloatingAddButton";
 
@@ -468,6 +469,13 @@ export default function AnnualBudgetManager() {
 
   const showEmptyState = !isLoading && cardItems.length === 0 && !isAdding;
   const showFab = !isLoading && !isAdding && !showEmptyState && availableCategories.length > 0;
+  // Combines both add-form modes' validity into the single Save button that
+  // now lives in the BottomSheet's shared footer, outside either mode's
+  // fieldset.
+  const isAddSubmitDisabled =
+    isSavingNew ||
+    !newAmount.trim() ||
+    (addMode === "single" ? !newCategoryId : !newGroupName.trim() || newGroupCategoryIds.length === 0);
 
   return (
     <>
@@ -530,72 +538,17 @@ export default function AnnualBudgetManager() {
         ) : (
           <>
             {isAdding && (
-              <>
-                <div
-                  className="fixed inset-0 z-40 bg-black/40 sm:hidden"
-                  onClick={handleCancelAdd}
-                />
-                <form
-                  onSubmit={handleAddSubmit}
-                  className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col gap-3 overflow-y-auto rounded-t-2xl border-t border-black/10 bg-background p-4 pb-[env(safe-area-inset-bottom)] shadow-xl sm:static sm:z-auto sm:max-h-none sm:overflow-visible sm:rounded-lg sm:border sm:shadow-none dark:border-white/10"
-                >
-                <div className="flex rounded-md border border-black/10 p-0.5 dark:border-white/10 w-fit">
-                  {(["single", "group"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setAddMode(mode)}
-                      className={`min-h-[44px] rounded px-3 text-sm font-medium transition-colors ${
-                        addMode === mode
-                          ? "bg-blue-600 text-white"
-                          : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
-                      }`}
-                    >
-                      {mode === "single" ? "Single category" : "Category group"}
-                    </button>
-                  ))}
-                </div>
-
-                {addMode === "single" ? (
-                  <div className="flex flex-wrap items-end gap-3">
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="new-annual-budget-category" className="text-sm font-medium">
-                        Category
-                      </label>
-                      <select
-                        id="new-annual-budget-category"
-                        value={newCategoryId}
-                        onChange={(e) => setNewCategoryId(e.target.value)}
-                        className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
-                      >
-                        {availableCategories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <label htmlFor="new-annual-budget-amount" className="text-sm font-medium">
-                        Annual amount
-                      </label>
-                      <input
-                        id="new-annual-budget-amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={newAmount}
-                        onChange={(e) => setNewAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-32 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
-                      />
-                    </div>
-
+              <BottomSheet
+                open
+                onClose={handleCancelAdd}
+                title="Add annual budget"
+                footer={
+                  <div className="flex items-center gap-2">
                     <button
                       type="submit"
-                      disabled={isSavingNew || !newCategoryId || !newAmount.trim()}
-                      className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+                      form="annual-budget-add-form"
+                      disabled={isAddSubmitDisabled}
+                      className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                     >
                       {isSavingNew ? "Saving…" : "Save"}
                     </button>
@@ -608,29 +561,56 @@ export default function AnnualBudgetManager() {
                       Cancel
                     </button>
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
+                }
+              >
+                <form
+                  id="annual-budget-add-form"
+                  onSubmit={handleAddSubmit}
+                  className="flex flex-col gap-4"
+                >
+                  <div className="flex w-fit rounded-md border border-black/10 p-0.5 dark:border-white/10">
+                    {(["single", "group"] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setAddMode(mode)}
+                        className={`min-h-[44px] rounded px-3 text-sm font-medium transition-colors ${
+                          addMode === mode
+                            ? "bg-blue-600 text-white"
+                            : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                        }`}
+                      >
+                        {mode === "single" ? "Single category" : "Category group"}
+                      </button>
+                    ))}
+                  </div>
+
+                  {addMode === "single" ? (
                     <div className="flex flex-wrap items-end gap-3">
                       <div className="flex flex-col gap-1">
-                        <label htmlFor="new-annual-group-name" className="text-sm font-medium">
-                          Group name
+                        <label htmlFor="new-annual-budget-category" className="text-sm font-medium">
+                          Category
                         </label>
-                        <input
-                          id="new-annual-group-name"
-                          type="text"
-                          value={newGroupName}
-                          onChange={(e) => setNewGroupName(e.target.value)}
-                          placeholder="e.g. Food & Dining"
+                        <select
+                          id="new-annual-budget-category"
+                          value={newCategoryId}
+                          onChange={(e) => setNewCategoryId(e.target.value)}
                           className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
-                        />
+                        >
+                          {availableCategories.map((category) => (
+                            <option key={category.id} value={category.id}>
+                              {category.name}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
                       <div className="flex flex-col gap-1">
-                        <label htmlFor="new-annual-group-amount" className="text-sm font-medium">
+                        <label htmlFor="new-annual-budget-amount" className="text-sm font-medium">
                           Annual amount
                         </label>
                         <input
-                          id="new-annual-group-amount"
+                          id="new-annual-budget-amount"
                           type="number"
                           min="0"
                           step="0.01"
@@ -641,60 +621,75 @@ export default function AnnualBudgetManager() {
                         />
                       </div>
                     </div>
-
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium">Categories</span>
-                      {availableCategories.length === 0 ? (
-                        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                          Every category already has an annual budget this year.
-                        </p>
-                      ) : (
-                        <div className="grid max-h-48 grid-cols-2 gap-1.5 overflow-y-auto rounded-md border border-black/10 p-3 sm:grid-cols-3 dark:border-white/10">
-                          {availableCategories.map((category) => (
-                            <label
-                              key={category.id}
-                              className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/10"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={newGroupCategoryIds.includes(category.id)}
-                                onChange={() => toggleGroupCategory(category.id)}
-                                className="h-3.5 w-3.5 accent-blue-600"
-                              />
-                              <span
-                                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                                style={{ backgroundColor: category.colour }}
-                              />
-                              {category.name}
-                            </label>
-                          ))}
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex flex-wrap items-end gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label htmlFor="new-annual-group-name" className="text-sm font-medium">
+                            Group name
+                          </label>
+                          <input
+                            id="new-annual-group-name"
+                            type="text"
+                            value={newGroupName}
+                            onChange={(e) => setNewGroupName(e.target.value)}
+                            placeholder="e.g. Food & Dining"
+                            className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                          />
                         </div>
-                      )}
-                    </div>
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={isSavingNew || !newGroupName.trim() || newGroupCategoryIds.length === 0}
-                        className="min-h-[44px] rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        {isSavingNew ? "Saving…" : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleCancelAdd}
-                        disabled={isSavingNew}
-                        className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
+                        <div className="flex flex-col gap-1">
+                          <label htmlFor="new-annual-group-amount" className="text-sm font-medium">
+                            Annual amount
+                          </label>
+                          <input
+                            id="new-annual-group-amount"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={newAmount}
+                            onChange={(e) => setNewAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-32 rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                          />
+                        </div>
+                      </div>
 
-                {addError && <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>}
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-medium">Categories</span>
+                        {availableCategories.length === 0 ? (
+                          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                            Every category already has an annual budget this year.
+                          </p>
+                        ) : (
+                          <div className="grid max-h-48 grid-cols-2 gap-1.5 overflow-y-auto rounded-md border border-black/10 p-3 sm:grid-cols-3 dark:border-white/10">
+                            {availableCategories.map((category) => (
+                              <label
+                                key={category.id}
+                                className="flex items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/10"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={newGroupCategoryIds.includes(category.id)}
+                                  onChange={() => toggleGroupCategory(category.id)}
+                                  className="h-3.5 w-3.5 accent-blue-600"
+                                />
+                                <span
+                                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                  style={{ backgroundColor: category.colour }}
+                                />
+                                {category.name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {addError && <p className="text-sm text-red-600 dark:text-red-400">{addError}</p>}
                 </form>
-              </>
+              </BottomSheet>
             )}
 
             {showEmptyState ? (

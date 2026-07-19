@@ -25,6 +25,20 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Hide scrollbars everywhere (period selector pill row, transaction card
+   list, drill-down panel, filter panels, the app shell's own scroll
+   containers, etc.) while keeping the underlying scroll behaviour intact —
+   applied globally rather than per-component so no scrollable element is
+   ever missed. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy IE/Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, newer Edge */
+}
+
 /* iOS Safari auto-zooms the page when a focused form field's font-size is
    under 16px — this holds every field at 16px below the desktop breakpoint
    so tapping into a filter/date/amount input doesn't yank the viewport in. */

@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { ListFilter, X } from "lucide-react";
+import { X } from "lucide-react";
 import type { BankFormat } from "../lib/csv";
 import type { Category } from "../context/CategoriesContext";
 import { groupCategoriesByParent, UNGROUPED } from "../lib/categories";
@@ -102,6 +101,11 @@ type Props = {
   onChange: (filters: TransactionFilterState) => void;
   categories: Category[];
   availableBanks: BankFormat[];
+  // The mobile "Filter" trigger lives in TransactionsTable's header now (so
+  // it can sit side by side with Upload CSV), so the sheet's open state is
+  // controlled from there instead of owned locally.
+  isSheetOpen: boolean;
+  onCloseSheet: () => void;
 };
 
 export default function TransactionFilters({
@@ -109,8 +113,9 @@ export default function TransactionFilters({
   onChange,
   categories,
   availableBanks,
+  isSheetOpen,
+  onCloseSheet,
 }: Props) {
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const activeCount = countActiveTransactionFilters(filters);
   const groups = groupCategoriesByParent(categories);
   const parentGroups = groups.filter((g) => g.parent !== UNGROUPED);
@@ -267,22 +272,9 @@ export default function TransactionFilters({
 
   return (
     <>
-      {/* Mobile: a "Filter" button opens the field set in a bottom sheet. */}
-      <button
-        type="button"
-        onClick={() => setIsSheetOpen(true)}
-        className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-black/10 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 sm:hidden dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
-      >
-        <ListFilter className="h-4 w-4" />
-        Filter
-        {activeCount > 0 && (
-          <span className="inline-flex items-center justify-center rounded-full bg-black/10 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-white/10 dark:text-zinc-300">
-            {activeCount}
-          </span>
-        )}
-      </button>
-
-      <BottomSheet title="Filters" open={isSheetOpen} onClose={() => setIsSheetOpen(false)}>
+      {/* Mobile: the "Filter" trigger button lives in TransactionsTable's
+          header, alongside Upload CSV — this just owns the sheet content. */}
+      <BottomSheet title="Filters" open={isSheetOpen} onClose={onCloseSheet}>
         {fields}
         {clearButton && <div className="mt-3">{clearButton}</div>}
       </BottomSheet>
