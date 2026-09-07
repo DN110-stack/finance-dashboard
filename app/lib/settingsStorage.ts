@@ -4,11 +4,15 @@ export type DefaultBudgetView = "monthly" | "annual";
 export type CachedSettings = {
   financialYearPreference: FinancialYearPreference;
   defaultBudgetView: DefaultBudgetView;
+  openingBalance: number | null;
+  openingBalanceDate: string | null;
 };
 
 export const DEFAULT_SETTINGS: CachedSettings = {
   financialYearPreference: "calendar",
   defaultBudgetView: "monthly",
+  openingBalance: null,
+  openingBalanceDate: null,
 };
 
 const STORAGE_KEY = "finance-dashboard:user-settings";
@@ -38,6 +42,10 @@ function readFromStorage(): CachedSettings {
     return {
       financialYearPreference: parsed.financialYearPreference,
       defaultBudgetView: parsed.defaultBudgetView,
+      openingBalance:
+        typeof parsed.openingBalance === "number" ? parsed.openingBalance : null,
+      openingBalanceDate:
+        typeof parsed.openingBalanceDate === "string" ? parsed.openingBalanceDate : null,
     };
   } catch {
     return DEFAULT_SETTINGS;
