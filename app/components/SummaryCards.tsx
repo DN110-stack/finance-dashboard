@@ -3,7 +3,9 @@
 import { useMemo } from "react";
 import { Landmark, PiggyBank, TrendingDown, TrendingUp } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
+import { useSettings } from "../context/SettingsContext";
 import { filterTransactionsByPeriod, type PeriodState } from "../lib/period";
+import { computeCurrentBalance } from "../lib/currentBalance";
 import { SummaryCardsSkeleton } from "./Skeleton";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -13,8 +15,9 @@ const currencyFormatter = new Intl.NumberFormat("en-US", {
 
 export default function SummaryCards({ period }: { period: PeriodState }) {
   const { transactions, isLoading } = useTransactions();
+  const { openingBalance, openingBalanceDate } = useSettings();
 
-  const { savings, monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
+  const { monthlyIncome, monthlyExpenses, savingsRate } = useMemo(() => {
     // One-off transactions are excluded from every dashboard calculation —
     // they're still visible/manageable on the Transactions page, just not
     // part of the recurring-spending picture shown here.
@@ -29,17 +32,26 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
       .filter((t) => t.amount < 0)
       .reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
-    const savings = monthlyIncome - monthlyExpenses;
+    const net = monthlyIncome - monthlyExpenses;
+    const savingsRate = monthlyIncome > 0 ? (net / monthlyIncome) * 100 : 0;
 
-    const savingsRate = monthlyIncome > 0 ? (savings / monthlyIncome) * 100 : 0;
-
-    return { savings, monthlyIncome, monthlyExpenses, savingsRate };
+    return { monthlyIncome, monthlyExpenses, savingsRate };
   }, [transactions, period]);
+
+  // Current balance is deliberately all-time and includes one-off
+  // transactions — it tracks the real account balance, not a period metric.
+  const currentBalance = useMemo(
+    () => computeCurrentBalance(transactions, openingBalance, openingBalanceDate),
+    [transactions, openingBalance, openingBalanceDate]
+  );
 
   const cards = [
     {
-      label: "Savings",
-      value: currencyFormatter.format(savings),
+      label: "Current Balance",
+      value:
+        currentBalance === null
+          ? "Set in Settings"
+          : currencyFormatter.format(currentBalance),
       icon: Landmark,
       iconClass: "bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400",
     },

@@ -13,6 +13,7 @@ type SettingsContextValue = CachedSettings & {
   isLoading: boolean;
   updateFinancialYearPreference: (value: FinancialYearPreference) => Promise<void>;
   updateDefaultBudgetView: (value: DefaultBudgetView) => Promise<void>;
+  updateOpeningBalance: (balance: number, date: string) => Promise<void>;
 };
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -45,7 +46,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
       try {
         const { data, error } = await supabase
           .from("user_settings")
-          .select("financial_year_preference, default_budget_view")
+          .select("financial_year_preference, default_budget_view, opening_balance, opening_balance_date")
           .eq("user_id", user.id)
           .maybeSingle();
 
@@ -53,6 +54,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           settingsStore.set({
             financialYearPreference: data.financial_year_preference,
             defaultBudgetView: data.default_budget_view,
+            openingBalance: data.opening_balance,
+            openingBalanceDate: data.opening_balance_date,
           });
         }
       } catch {
@@ -91,6 +94,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         user_id: user.id,
         financial_year_preference: next.financialYearPreference,
         default_budget_view: next.defaultBudgetView,
+        opening_balance: next.openingBalance,
+        opening_balance_date: next.openingBalanceDate,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id" }
@@ -109,6 +114,10 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     await saveSettings({ ...cached, defaultBudgetView: value });
   }
 
+  async function updateOpeningBalance(balance: number, date: string) {
+    await saveSettings({ ...cached, openingBalance: balance, openingBalanceDate: date });
+  }
+
   return (
     <SettingsContext.Provider
       value={{
@@ -116,6 +125,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         updateFinancialYearPreference,
         updateDefaultBudgetView,
+        updateOpeningBalance,
       }}
     >
       {children}
