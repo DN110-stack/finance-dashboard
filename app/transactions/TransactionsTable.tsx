@@ -393,59 +393,77 @@ export default function TransactionsTable() {
   }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
 
     setIsUploading(true);
-    try {
-      const text = await file.text();
-      const parsed = parseTransactionsCSV(text);
-      if (parsed.transactions.length === 0) {
-        throw new Error("No transactions found in CSV");
+    setError(null);
+    setNotice(null);
+
+    // Files are processed one at a time, not in parallel — addTransactions
+    // de-duplicates against what's already in the database, so a later file
+    // overlapping an earlier one is skipped correctly only if the earlier
+    // insert has finished.
+    const inserted: Transaction[] = [];
+    let skippedCount = 0;
+    let lastBank: BankFormat | null = null;
+    const failures: string[] = [];
+
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const parsed = parseTransactionsCSV(text);
+        if (parsed.transactions.length === 0) {
+          throw new Error("No transactions found in CSV");
+        }
+        const result = await addTransactions(parsed.transactions, parsed.bank, file.name);
+        inserted.push(...result.inserted);
+        skippedCount += result.skippedCount;
+        lastBank = parsed.bank;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to parse CSV";
+        failures.push(files.length > 1 ? `${file.name}: ${message}` : message);
       }
-      const { inserted, skippedCount } = await addTransactions(
-        parsed.transactions,
-        parsed.bank,
-        file.name
-      );
-      setDetectedBank(parsed.bank);
-      setError(null);
+    }
+
+    if (lastBank) setDetectedBank(lastBank);
+    if (failures.length > 0) setError(failures.join(" · "));
+
+    if (files.length > failures.length) {
       setNotice(
         `Added ${inserted.length} new transaction${inserted.length === 1 ? "" : "s"}` +
+          (files.length > 1 ? ` from ${files.length - failures.length} files` : "") +
           (skippedCount > 0
             ? ` — skipped ${skippedCount} duplicate${skippedCount === 1 ? "" : "s"}.`
             : ".")
       );
-
-      const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
-      if (uncategorized.length > 0) {
-        // Open the review screen right away rather than waiting on the AI —
-        // suggestions fill in as they arrive, and the screen still works if
-        // they never do (network failure, timeout, etc).
-        setReviewSuggestions({});
-        setReviewQueue(uncategorized);
-        setSuggestionsLoading(true);
-        fetchCategorySuggestions(
-          uncategorized.map((t) => t.description),
-          categories.map((c) => c.name)
-        )
-          .then((suggestions) => {
-            const suggestionsById: Record<string, CategorySuggestion> = {};
-            for (const suggestion of suggestions) {
-              const id = uncategorized[suggestion.index]?.id;
-              if (id) suggestionsById[id] = suggestion;
-            }
-            setReviewSuggestions(suggestionsById);
-          })
-          .finally(() => setSuggestionsLoading(false));
-      }
-    } catch (err) {
-      setNotice(null);
-      setError(err instanceof Error ? err.message : "Failed to parse CSV");
-    } finally {
-      setIsUploading(false);
-      event.target.value = "";
     }
+
+    const uncategorized = inserted.filter((t) => t.category === UNCATEGORIZED);
+    if (uncategorized.length > 0) {
+      // Open the review screen right away rather than waiting on the AI —
+      // suggestions fill in as they arrive, and the screen still works if
+      // they never do (network failure, timeout, etc).
+      setReviewSuggestions({});
+      setReviewQueue(uncategorized);
+      setSuggestionsLoading(true);
+      fetchCategorySuggestions(
+        uncategorized.map((t) => t.description),
+        categories.map((c) => c.name)
+      )
+        .then((suggestions) => {
+          const suggestionsById: Record<string, CategorySuggestion> = {};
+          for (const suggestion of suggestions) {
+            const id = uncategorized[suggestion.index]?.id;
+            if (id) suggestionsById[id] = suggestion;
+          }
+          setReviewSuggestions(suggestionsById);
+        })
+        .finally(() => setSuggestionsLoading(false));
+    }
+
+    setIsUploading(false);
+    event.target.value = "";
   }
 
   return (
@@ -454,6 +472,7 @@ export default function TransactionsTable() {
         ref={fileInputRef}
         type="file"
         accept=".csv,text/csv"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -497,7 +516,7 @@ export default function TransactionsTable() {
               ? "Uploading…"
               : categoriesLoading
                 ? "Loading…"
-                : "Upload CSV"}
+                : "Upload CSVs"}
           </button>
         </div>
       </div>
@@ -518,7 +537,7 @@ export default function TransactionsTable() {
           disabled={isUploading || categoriesLoading}
           className="flex min-h-[44px] flex-1 items-center justify-center rounded-lg border border-black/10 text-sm font-medium text-zinc-700 transition-colors hover:bg-black/5 disabled:opacity-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/10"
         >
-          {isUploading ? "Uploading…" : categoriesLoading ? "Loading…" : "Upload CSV"}
+          {isUploading ? "Uploading…" : categoriesLoading ? "Loading…" : "Upload CSVs"}
         </button>
       </div>
 
