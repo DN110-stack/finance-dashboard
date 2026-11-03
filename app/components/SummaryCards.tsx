@@ -71,8 +71,8 @@ const STAT_DEFINITIONS: Record<SummaryStatType, StatDefinition> = {
     iconClass: "bg-purple-100 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400",
   },
   netCashFlow: {
-    label: "Net Cash Flow",
-    description: "Income minus expenses for the selected period.",
+    label: "Savings Amount",
+    description: "How much you saved in the selected period — income minus expenses (negative if you overspent).",
     icon: ArrowLeftRight,
     iconClass: "bg-teal-100 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400",
   },
