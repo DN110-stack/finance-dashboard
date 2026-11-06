@@ -274,3 +274,43 @@ export const billReminderStore = {
     remindListeners.forEach((listener) => listener());
   },
 };
+
+// --- Upcoming bills view preference ----------------------------------------
+
+export type BillsView = "list" | "calendar";
+const VIEW_STORAGE_KEY = "finance-dashboard:bills-view";
+
+function readView(): BillsView {
+  try {
+    const raw = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    return raw === "calendar" ? "calendar" : "list";
+  } catch {
+    return "list";
+  }
+}
+
+let cachedView: BillsView | null = null;
+const viewListeners = new Set<() => void>();
+
+export const billsViewStore = {
+  subscribe(callback: () => void) {
+    viewListeners.add(callback);
+    return () => viewListeners.delete(callback);
+  },
+  getSnapshot(): BillsView {
+    if (cachedView === null) cachedView = readView();
+    return cachedView;
+  },
+  getServerSnapshot(): BillsView {
+    return "list";
+  },
+  set(view: BillsView) {
+    cachedView = view;
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, view);
+    } catch {
+      // Persistence is a nice-to-have — see chartLayoutStore.
+    }
+    viewListeners.forEach((listener) => listener());
+  },
+};

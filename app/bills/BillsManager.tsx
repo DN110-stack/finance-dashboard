@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { Check, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
+import { CalendarDays, Check, List, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 import { useBills, type BillInput } from "../context/BillsContext";
 import {
   BILL_FREQUENCY_LABELS,
   REMIND_DAY_OPTIONS,
   billReminderStore,
+  billsViewStore,
   formatDueDate,
   monthlyCost,
   type Bill,
@@ -16,6 +17,7 @@ import {
 import { toISODate } from "../lib/period";
 import { useBillSchedule } from "../lib/useBillSchedule";
 import BillForm from "./BillForm";
+import BillsCalendar from "./BillsCalendar";
 
 const currencyFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
@@ -55,6 +57,12 @@ export default function BillsManager() {
     billReminderStore.subscribe,
     billReminderStore.getSnapshot,
     billReminderStore.getServerSnapshot
+  );
+
+  const view = useSyncExternalStore(
+    billsViewStore.subscribe,
+    billsViewStore.getSnapshot,
+    billsViewStore.getServerSnapshot
   );
 
   const today = toISODate(new Date());
@@ -188,20 +196,51 @@ export default function BillsManager() {
 
       <div className="mt-6 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Coming up</h2>
-        <button
-          type="button"
-          onClick={() => openForm(null)}
-          className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4" />
-          Add bill
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-md border border-black/10 p-0.5 dark:border-white/10">
+            {(
+              [
+                { value: "list", label: "List", icon: List },
+                { value: "calendar", label: "Calendar", icon: CalendarDays },
+              ] as const
+            ).map((option) => {
+              const Icon = option.icon;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => billsViewStore.set(option.value)}
+                  aria-label={`${option.label} view`}
+                  aria-pressed={view === option.value}
+                  className={`flex min-h-[40px] items-center gap-1.5 rounded px-2.5 text-sm font-medium transition-colors ${
+                    view === option.value
+                      ? "bg-blue-600 text-white"
+                      : "text-zinc-600 hover:bg-black/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="hidden sm:inline">{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => openForm(null)}
+            className="flex min-h-[44px] items-center gap-1.5 rounded-md bg-blue-600 px-3 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Add bill
+          </button>
+        </div>
       </div>
 
       {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
 
       {isLoading ? (
         <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Loading bills…</p>
+      ) : view === "calendar" ? (
+        <BillsCalendar today={today} renderOccurrence={renderOccurrence} />
       ) : occurrences.length === 0 ? (
         <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
           {bills.length === 0
