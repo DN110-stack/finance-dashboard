@@ -3,7 +3,9 @@
 import { useMemo, useSyncExternalStore, type ComponentType } from "react";
 import {
   ArrowLeftRight,
+  Bell,
   Calculator,
+  CalendarClock,
   CalendarDays,
   ChevronDown,
   Hash,
@@ -25,6 +27,8 @@ import {
   type PeriodState,
 } from "../lib/period";
 import { computeCurrentBalance } from "../lib/currentBalance";
+import { formatDueDate } from "../lib/bills";
+import { useBillSchedule } from "../lib/useBillSchedule";
 import {
   ALL_SUMMARY_STAT_TYPES,
   summaryLayoutStore,
@@ -112,6 +116,18 @@ const STAT_DEFINITIONS: Record<SummaryStatType, StatDefinition> = {
     icon: Hourglass,
     iconClass: "bg-lime-100 text-lime-700 dark:bg-lime-500/10 dark:text-lime-400",
   },
+  billsRemaining: {
+    label: "Bills Remaining",
+    description: "Fixed outgoings still to pay this calendar month, from your Bills page.",
+    icon: CalendarClock,
+    iconClass: "bg-cyan-100 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400",
+  },
+  nextBill: {
+    label: "Next Bill",
+    description: "The next unpaid bill coming due, from your Bills page.",
+    icon: Bell,
+    iconClass: "bg-fuchsia-100 text-fuchsia-700 dark:bg-fuchsia-500/10 dark:text-fuchsia-400",
+  },
 };
 
 // Days from the start of the period up to today (or the period's end, if
@@ -134,6 +150,15 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
     summaryLayoutStore.getSnapshot,
     summaryLayoutStore.getServerSnapshot
   );
+
+  // Bills for the rest of this month (including anything already overdue in
+  // it) plus the year ahead, so "Next Bill" can look past month-end.
+  const now = new Date();
+  const today = toISODate(now);
+  const monthStart = toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+  const monthEnd = toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  const horizon = toISODate(new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()));
+  const { occurrences: billOccurrences } = useBillSchedule(monthStart, horizon, today);
 
   const values = useMemo(() => {
     // One-off transactions are excluded from every dashboard calculation —
@@ -174,6 +199,12 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
         ? Math.floor(currentBalance / avgDailySpend)
         : null;
 
+    const monthBills = billOccurrences.filter((o) => o.dueDate <= monthEnd);
+    const unpaidMonthBills = monthBills.filter((o) => o.status !== "paid");
+    const billsRemaining = unpaidMonthBills.reduce((sum, o) => sum + o.bill.amount, 0);
+    const billsTotal = monthBills.reduce((sum, o) => sum + o.bill.amount, 0);
+    const nextBill = billOccurrences.find((o) => o.status !== "paid" && o.dueDate >= today) ?? null;
+
     const none = "—";
     const record: Record<SummaryStatType, { value: string; detail?: string }> = {
       currentBalance: {
@@ -203,9 +234,23 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
       balanceRunway: {
         value: runwayDays === null ? (currentBalance === null ? "Set in Settings" : none) : `${runwayDays} days`,
       },
+      billsRemaining: {
+        value: currencyFormatter.format(billsRemaining),
+        detail:
+          monthBills.length === 0
+            ? "No bills this month"
+            : `${monthBills.length - unpaidMonthBills.length} of ${monthBills.length} paid · ${currencyFormatter.format(billsTotal)} total`,
+      },
+      nextBill: nextBill
+        ? {
+            value: currencyFormatter.format(nextBill.bill.amount),
+            detail: `${nextBill.bill.name} · ${formatDueDate(nextBill.dueDate, today)}`,
+          }
+        : { value: none },
     };
     return record;
-  }, [transactions, period, openingBalance, openingBalanceDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- today/monthEnd derive from the same render-time date as billOccurrences
+  }, [transactions, period, openingBalance, openingBalanceDate, billOccurrences]);
 
   function updateSlot(index: number, type: SummaryStatType) {
     const next = [...layout] as SummaryLayout;

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Loader2, Receipt, RefreshCw, Settings, Target, Wallet } from "lucide-react";
+import { CalendarClock, LayoutDashboard, Loader2, Receipt, RefreshCw, Settings, Target, Wallet } from "lucide-react";
 import ThemeToggle from "./ThemeToggle";
 import SignOutButton from "./SignOutButton";
 
@@ -11,6 +11,7 @@ const navItems = [
   { label: "Transactions", href: "/transactions", icon: Receipt },
   { label: "Budget", href: "/budget", icon: Wallet },
   { label: "Goals", href: "/goals", icon: Target },
+  { label: "Bills", href: "/bills", icon: CalendarClock },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 

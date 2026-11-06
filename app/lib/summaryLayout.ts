@@ -9,7 +9,9 @@ export type SummaryStatType =
   | "topCategory"
   | "transactionCount"
   | "avgExpense"
-  | "balanceRunway";
+  | "balanceRunway"
+  | "billsRemaining"
+  | "nextBill";
 
 export const ALL_SUMMARY_STAT_TYPES: SummaryStatType[] = [
   "currentBalance",
@@ -23,6 +25,8 @@ export const ALL_SUMMARY_STAT_TYPES: SummaryStatType[] = [
   "transactionCount",
   "avgExpense",
   "balanceRunway",
+  "billsRemaining",
+  "nextBill",
 ];
 
 export type SummaryLayout = [SummaryStatType, SummaryStatType, SummaryStatType, SummaryStatType];

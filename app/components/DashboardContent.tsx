@@ -2,6 +2,7 @@
 
 import { useState, useSyncExternalStore } from "react";
 import SummaryCards from "./SummaryCards";
+import BillsReminder from "./BillsReminder";
 import ChatPanel from "./ChatPanel";
 import PeriodSelector from "./PeriodSelector";
 import ChartsSection from "./ChartsSection";
@@ -56,6 +57,8 @@ export default function DashboardContent() {
           </p>
         )}
       </div>
+
+      <BillsReminder />
 
       <SummaryCards period={period} />
 
