@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useSettings } from "../context/SettingsContext";
 import BudgetManager from "./BudgetManager";
 import AnnualBudgetManager from "./AnnualBudgetManager";
+import WeeklyBudgetView from "./WeeklyBudgetView";
 
-const VIEWS = ["Monthly", "Annual"] as const;
+const VIEWS = ["Monthly", "Weekly", "Annual"] as const;
 type View = (typeof VIEWS)[number];
 
 function viewFromDefaultBudgetView(value: "monthly" | "annual"): View {
@@ -56,6 +57,7 @@ export default function BudgetViewTabs() {
       </div>
 
       {activeView === "Monthly" && <BudgetManager />}
+      {activeView === "Weekly" && <WeeklyBudgetView />}
       {activeView === "Annual" && <AnnualBudgetManager />}
     </>
   );
