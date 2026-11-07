@@ -12,7 +12,7 @@ const NEW_CATEGORY_VALUE = "__new__";
 const NEW_PARENT_VALUE = "__new_parent__";
 
 export default function CategoryCell({ transaction }: { transaction: Transaction }) {
-  const { categories, addCategory } = useCategories();
+  const { categories, visibleCategories, addCategory } = useCategories();
   const { assignCategory } = useTransactions();
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -23,7 +23,7 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
   const [justSaved, setJustSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+  const groups = useMemo(() => groupCategoriesByParent(visibleCategories), [visibleCategories]);
   const parentOptions = useMemo(() => distinctParents(categories), [categories]);
 
   const currentCategory = categories.find(

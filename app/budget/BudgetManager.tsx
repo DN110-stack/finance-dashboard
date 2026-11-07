@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Copy, PiggyBank, Plus, X } from "lucide-reac
 import { useBudgets, type Budget } from "../context/BudgetsContext";
 import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
+import GroupBudgetEditSheet, { type GroupBudgetEdit } from "./GroupBudgetEditSheet";
 import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import { useSettings } from "../context/SettingsContext";
 import { orderByParentPriority } from "../lib/categories";
@@ -79,7 +80,7 @@ export default function BudgetManager() {
     upsertBudget,
     deleteBudget,
     addBudgetGroup,
-    updateBudgetGroupAmount,
+    updateBudgetGroup,
     deleteBudgetGroup,
   } = useBudgets();
   const { annualBudgets } = useAnnualBudgets();
@@ -104,6 +105,9 @@ export default function BudgetManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editAmount, setEditAmount] = useState("");
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  // A group budget is edited in a sheet (name, categories and amount), not inline.
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [isSavingGroup, setIsSavingGroup] = useState(false);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isCopying, setIsCopying] = useState(false);
@@ -156,8 +160,10 @@ export default function BudgetManager() {
   // The 11 core categories (always present) plus any custom ones, in the
   // same fixed display order used everywhere else in the app.
   const orderedCategories = useMemo(() => {
-    const order = orderByParentPriority(categories.map((c) => c.name));
-    const byName = new Map(categories.map((c) => [c.name, c]));
+    // Hidden categories aren't offered for new budgets.
+    const shown = categories.filter((c) => !c.isHidden);
+    const order = orderByParentPriority(shown.map((c) => c.name), categories);
+    const byName = new Map(shown.map((c) => [c.name, c]));
     return order.map((name) => byName.get(name)).filter((c): c is Category => !!c);
   }, [categories]);
   const categoryByName = useMemo(
@@ -538,6 +544,10 @@ export default function BudgetManager() {
   }
 
   function handleStartEdit(item: CardItem) {
+    if (item.kind === "group") {
+      setEditingGroupId(item.id);
+      return;
+    }
     setEditingId(item.id);
     // For a recurring budget, edit the raw per-period figure the user
     // originally entered, not the derived monthly-equivalent.
@@ -545,6 +555,29 @@ export default function BudgetManager() {
       item.periodType && item.periodType !== "monthly" ? (item.periodAmount ?? item.amount) : item.amount;
     setEditAmount(String(prefillAmount));
     clearActionError(item.id);
+  }
+
+  const editingGroup = editingGroupId ? (budgetGroups.find((g) => g.id === editingGroupId) ?? null) : null;
+
+  // Everything the group could cover: its own categories plus any not
+  // already budgeted elsewhere this month.
+  const editingGroupOptions = useMemo(() => {
+    if (!editingGroup) return [];
+    const own = new Set(editingGroup.categories.map((name) => name.toLowerCase()));
+    return orderedCategories.filter(
+      (c) => own.has(c.name.toLowerCase()) || !claimedCategoryNames.has(c.name.toLowerCase())
+    );
+  }, [editingGroup, orderedCategories, claimedCategoryNames]);
+
+  async function handleSaveGroup(edit: GroupBudgetEdit) {
+    if (!editingGroupId) return;
+    setIsSavingGroup(true);
+    try {
+      await updateBudgetGroup(editingGroupId, edit);
+      setEditingGroupId(null);
+    } finally {
+      setIsSavingGroup(false);
+    }
   }
 
   function handleCancelEdit() {
@@ -579,8 +612,6 @@ export default function BudgetManager() {
         } else {
           await upsertBudget(item.name, targetMonth, amount);
         }
-      } else {
-        await updateBudgetGroupAmount(item.id, amount);
       }
       handleCancelEdit();
     } catch (err) {
@@ -751,6 +782,21 @@ export default function BudgetManager() {
           <BudgetCardsSkeleton />
         ) : (
           <>
+            {editingGroup && (
+              <GroupBudgetEditSheet
+                key={editingGroup.id}
+                initial={{
+                  name: editingGroup.name,
+                  amount: editingGroup.amount,
+                  categories: editingGroup.categories,
+                }}
+                options={editingGroupOptions}
+                onSubmit={handleSaveGroup}
+                onClose={() => setEditingGroupId(null)}
+                isSaving={isSavingGroup}
+              />
+            )}
+
             {isAdding && (
               <BottomSheet
                 open

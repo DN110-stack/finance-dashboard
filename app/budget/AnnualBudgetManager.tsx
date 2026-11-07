@@ -117,8 +117,10 @@ export default function AnnualBudgetManager() {
   // The 11 core categories (always present) plus any custom ones, in the
   // same fixed display order used everywhere else in the app.
   const orderedCategories = useMemo(() => {
-    const order = orderByParentPriority(categories.map((c) => c.name));
-    const byName = new Map(categories.map((c) => [c.name, c]));
+    // Hidden categories aren't offered for new budgets.
+    const shown = categories.filter((c) => !c.isHidden);
+    const order = orderByParentPriority(shown.map((c) => c.name), categories);
+    const byName = new Map(shown.map((c) => [c.name, c]));
     return order.map((name) => byName.get(name)).filter((c): c is Category => !!c);
   }, [categories]);
   const categoryByName = useMemo(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, EyeOff, Pencil, Trash2 } from "lucide-react";
 import {
   totalCategoryUsage,
   useCategories,
@@ -102,9 +102,118 @@ function resolveParentCategory(selection: string, newParentName: string): string
   return selection;
 }
 
+function CoreCategoryRow({
+  category,
+  onSave,
+  onToggleHidden,
+}: {
+  category: Category;
+  onSave: (name: string, colour: string) => Promise<string | null>;
+  onToggleHidden: () => void;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(category.name);
+  const [colour, setColour] = useState(category.colour);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSave(event: React.FormEvent) {
+    event.preventDefault();
+    setIsSaving(true);
+    setError(null);
+    const result = await onSave(name, colour);
+    setIsSaving(false);
+    if (result === null) setIsEditing(false);
+    else if (result !== "cancelled") setError(result);
+  }
+
+  if (isEditing) {
+    return (
+      <li className="px-4 py-3">
+        <form onSubmit={handleSave} className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            aria-label="Category name"
+            className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+          />
+          <input
+            type="color"
+            value={colour}
+            onChange={(event) => setColour(event.target.value)}
+            aria-label="Category colour"
+            className="h-8 w-12 cursor-pointer rounded-md border border-black/10 bg-transparent p-1 dark:border-white/10"
+          />
+          <button
+            type="submit"
+            disabled={isSaving || !name.trim()}
+            className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsEditing(false);
+              setName(category.name);
+              setColour(category.colour);
+              setError(null);
+            }}
+            disabled={isSaving}
+            className="text-sm text-zinc-500 hover:underline disabled:opacity-50 dark:text-zinc-400"
+          >
+            Cancel
+          </button>
+        </form>
+        {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      </li>
+    );
+  }
+
+  return (
+    <li className={`flex items-center gap-3 px-4 py-3 ${category.isHidden ? "opacity-60" : ""}`}>
+      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: category.colour }} />
+      <span className="text-sm font-medium">{category.name}</span>
+      <KindBadge kind={category.kind} />
+      {category.isHidden && (
+        <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+          Hidden
+        </span>
+      )}
+      <div className="ml-auto flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => setIsEditing(true)}
+          aria-label={`Rename ${category.name}`}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onToggleHidden}
+          aria-label={category.isHidden ? `Show ${category.name}` : `Hide ${category.name}`}
+          title={category.isHidden ? "Show in pickers" : "Hide from pickers"}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+        >
+          {category.isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </li>
+  );
+}
+
 export default function CategoriesManager() {
-  const { categories, isLoading, addCategory, updateCategory, getCategoryUsage, deleteCategory } =
-    useCategories();
+  const {
+    categories,
+    isLoading,
+    addCategory,
+    updateCategory,
+    getCategoryUsage,
+    deleteCategory,
+    setCategoryHidden,
+  } = useCategories();
   const confirm = useConfirm();
 
   const [name, setName] = useState("");
@@ -135,19 +244,21 @@ export default function CategoriesManager() {
 
   const parentOptions = useMemo(() => distinctParents(categories), [categories]);
 
-  // The 11 core categories are seeded for every user and shown as a fixed,
-  // read-only set; anything else is a category the user created themselves.
+  // The 11 core categories are seeded for every user. They can be renamed and
+  // hidden but not deleted, and are identified by their permanent core_key so
+  // a rename doesn't turn one into an ordinary category.
   const coreCategories = useMemo(
     () =>
-      PARENT_CATEGORIES.map((coreName) => categories.find((c) => c.name === coreName)).filter(
-        (c): c is Category => !!c
-      ),
+      categories
+        .filter((c) => c.coreKey)
+        .sort(
+          (a, b) =>
+            (PARENT_CATEGORIES as readonly string[]).indexOf(a.coreKey!) -
+            (PARENT_CATEGORIES as readonly string[]).indexOf(b.coreKey!)
+        ),
     [categories]
   );
-  const customCategories = useMemo(
-    () => categories.filter((c) => !(PARENT_CATEGORIES as readonly string[]).includes(c.name)),
-    [categories]
-  );
+  const customCategories = useMemo(() => categories.filter((c) => !c.coreKey), [categories]);
   const customGroups = useMemo(() => groupCategoriesByParent(customCategories), [customCategories]);
 
   function handleParentChange(value: string) {
@@ -221,6 +332,51 @@ export default function CategoriesManager() {
       setError(err instanceof Error ? err.message : "Failed to delete category");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleToggleHidden(category: Category) {
+    setError(null);
+    try {
+      await setCategoryHidden(category.id, !category.isHidden);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category");
+    }
+  }
+
+  // Core categories: rename and recolour only. The parent label always follows
+  // the name (a core category is its own parent), and the database renames
+  // everything filed under it.
+  async function handleSaveCore(category: Category, name: string, colour: string): Promise<string | null> {
+    const trimmedName = name.trim();
+    if (!trimmedName) return "Enter a name";
+
+    if (trimmedName.toLowerCase() !== category.name.toLowerCase()) {
+      try {
+        const usage = await getCategoryUsage(category.id);
+        if (totalCategoryUsage(usage) > 0) {
+          const confirmed = await confirm({
+            title: "Rename category?",
+            message: `Renaming "${category.name}" to "${trimmedName}" will also update ${describeUsage(usage)}.`,
+            confirmLabel: "Rename",
+          });
+          if (!confirmed) return "cancelled";
+        }
+      } catch (err) {
+        return err instanceof Error ? err.message : "Failed to check category usage";
+      }
+    }
+
+    try {
+      await updateCategory(category.id, {
+        name: trimmedName,
+        colour,
+        parentCategory: trimmedName,
+        kind: category.kind,
+      });
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Failed to update category";
     }
   }
 
@@ -419,14 +575,12 @@ export default function CategoriesManager() {
             <h2 className="mb-3 text-lg font-semibold">Core Categories</h2>
             <ul className="divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
               {coreCategories.map((category) => (
-                <li key={category.id} className="flex items-center gap-3 px-4 py-3">
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: category.colour }}
-                  />
-                  <span className="text-sm font-medium">{category.name}</span>
-                  <KindBadge kind={category.kind} />
-                </li>
+                <CoreCategoryRow
+                  key={category.id}
+                  category={category}
+                  onSave={(name, colour) => handleSaveCore(category, name, colour)}
+                  onToggleHidden={() => handleToggleHidden(category)}
+                />
               ))}
             </ul>
           </div>
@@ -568,8 +722,22 @@ export default function CategoriesManager() {
                                 />
                                 <span className="text-sm font-medium">{category.name}</span>
                                 <KindBadge kind={category.kind} />
+                                {category.isHidden && (
+                                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                                    Hidden
+                                  </span>
+                                )}
                               </div>
                               <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleHidden(category)}
+                                  aria-label={category.isHidden ? `Show ${category.name}` : `Hide ${category.name}`}
+                                  title={category.isHidden ? "Show in pickers" : "Hide from pickers"}
+                                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-black/5 dark:text-zinc-400 dark:hover:bg-white/10"
+                                >
+                                  {category.isHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
                                 <button
                                   type="button"
                                   onClick={() => startEdit(category)}

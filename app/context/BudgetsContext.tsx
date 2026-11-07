@@ -40,6 +40,10 @@ type BudgetsContextValue = {
     categories: string[]
   ) => Promise<BudgetGroup>;
   updateBudgetGroupAmount: (id: string, amount: number) => Promise<BudgetGroup>;
+  updateBudgetGroup: (
+    id: string,
+    updates: { name: string; amount: number; categories: string[] }
+  ) => Promise<BudgetGroup>;
   deleteBudgetGroup: (id: string) => Promise<void>;
 };
 
@@ -259,6 +263,32 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
     return group;
   }
 
+  async function updateBudgetGroup(
+    id: string,
+    updates: { name: string; amount: number; categories: string[] }
+  ): Promise<BudgetGroup> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("budget_groups")
+      .update({ name: updates.name, amount: updates.amount, categories: updates.categories })
+      .eq("id", id)
+      .select("id, name, amount, month, categories")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const group: BudgetGroup = {
+      id: data.id,
+      name: data.name,
+      amount: Number(data.amount),
+      month: data.month,
+      categories: data.categories ?? [],
+    };
+
+    setBudgetGroups((prev) => prev.map((g) => (g.id === id ? group : g)));
+    return group;
+  }
+
   async function updateBudgetGroupAmount(id: string, amount: number): Promise<BudgetGroup> {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -300,6 +330,7 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
         deleteBudget,
         addBudgetGroup,
         updateBudgetGroupAmount,
+        updateBudgetGroup,
         deleteBudgetGroup,
       }}
     >

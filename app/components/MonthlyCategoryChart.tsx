@@ -47,7 +47,7 @@ export default function MonthlyCategoryChart({ period }: { period: PeriodState }
       monthTotals.set(monthKey, totals);
     }
 
-    const categories = orderByParentPriority(categorySet);
+    const categories = orderByParentPriority(categorySet, userCategories);
 
     const data = Array.from(monthTotals.entries())
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))

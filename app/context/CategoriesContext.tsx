@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { emitCategoryNameReplaced } from "../lib/categoryEvents";
 import type { CategoryKind } from "../lib/categoryKind";
@@ -11,6 +11,8 @@ export type Category = {
   colour: string;
   parentCategory: string | null;
   kind: CategoryKind;
+  coreKey: string | null;
+  isHidden: boolean;
 };
 
 // How many records of each kind still reference a category by name.
@@ -36,6 +38,8 @@ type CategoryUpdates = {
 
 type CategoriesContextValue = {
   categories: Category[];
+  // Everything except hidden categories — what pickers should offer.
+  visibleCategories: Category[];
   isLoading: boolean;
   addCategory: (
     name: string,
@@ -48,6 +52,7 @@ type CategoriesContextValue = {
   // When anything still uses the category, `moveToId` names the category
   // that takes those records over — the database refuses the delete otherwise.
   deleteCategory: (id: string, moveToId?: string) => Promise<void>;
+  setCategoryHidden: (id: string, hidden: boolean) => Promise<void>;
 };
 
 const CategoriesContext = createContext<CategoriesContextValue | null>(null);
@@ -76,7 +81,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, colour, parent_category, kind")
+        .select("id, name, colour, parent_category, kind, core_key, is_hidden")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
@@ -90,6 +95,8 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
             colour: row.colour,
             parentCategory: row.parent_category,
             kind: row.kind,
+            coreKey: row.core_key,
+            isHidden: row.is_hidden,
           }))
         );
       }
@@ -134,7 +141,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     const { data, error } = await supabase
       .from("categories")
       .insert({ user_id: user.id, name: trimmedName, colour, parent_category: parentCategory, kind })
-      .select("id, name, colour, parent_category, kind")
+      .select("id, name, colour, parent_category, kind, core_key, is_hidden")
       .single();
 
     if (error) throw new Error(error.message);
@@ -145,6 +152,8 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
       colour: data.colour,
       parentCategory: data.parent_category,
       kind: data.kind,
+      coreKey: data.core_key,
+      isHidden: data.is_hidden,
     };
 
     setCategories((prev) => sortByName([...prev, category]));
@@ -188,14 +197,36 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
       colour: updates.colour,
       parentCategory: updates.parentCategory,
       kind: updates.kind,
+      coreKey: previous?.coreKey ?? null,
+      isHidden: previous?.isHidden ?? false,
     };
 
     if (previous && previous.name !== trimmedName) {
       emitCategoryNameReplaced(previous.name, trimmedName);
     }
 
-    setCategories((prev) => sortByName(prev.map((c) => (c.id === id ? category : c))));
-    return category;
+    const renamedParent =
+      previous && (previous.parentCategory ?? "").toLowerCase() === previous.name.toLowerCase();
+    // The database renames a parent row's own parent label too (and its
+    // children's), so mirror that here.
+    const savedCategory = renamedParent ? { ...category, parentCategory: trimmedName } : category;
+
+    setCategories((prev) =>
+      sortByName(
+        prev.map((c) => {
+          if (c.id === id) return savedCategory;
+          if (
+            renamedParent &&
+            previous &&
+            (c.parentCategory ?? "").toLowerCase() === previous.name.toLowerCase()
+          ) {
+            return { ...c, parentCategory: trimmedName };
+          }
+          return c;
+        })
+      )
+    );
+    return savedCategory;
   }
 
   async function getCategoryUsage(id: string): Promise<CategoryUsage> {
@@ -203,6 +234,14 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     const { data, error } = await supabase.rpc("category_usage", { p_id: id });
     if (error) throw new Error(error.message);
     return data as CategoryUsage;
+  }
+
+  async function setCategoryHidden(id: string, hidden: boolean) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("set_category_hidden", { p_id: id, p_hidden: hidden });
+    if (error) throw new Error(error.message);
+
+    setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, isHidden: hidden } : c)));
   }
 
   async function deleteCategory(id: string, moveToId?: string) {
@@ -220,15 +259,19 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     setCategories((prev) => prev.filter((category) => category.id !== id));
   }
 
+  const visibleCategories = useMemo(() => categories.filter((c) => !c.isHidden), [categories]);
+
   return (
     <CategoriesContext.Provider
       value={{
         categories,
+        visibleCategories,
         isLoading,
         addCategory,
         updateCategory,
         getCategoryUsage,
         deleteCategory,
+        setCategoryHidden,
       }}
     >
       {children}

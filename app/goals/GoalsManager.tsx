@@ -23,7 +23,7 @@ const CONFETTI_DURATION_MS = 3500;
 export default function GoalsManager() {
   const confirm = useConfirm();
   const { goals, isLoading: goalsLoading, addGoal, updateGoal, deleteGoal } = useGoals();
-  const { categories, isLoading: categoriesLoading } = useCategories();
+  const { visibleCategories, isLoading: categoriesLoading } = useCategories();
   const { transactions } = useTransactions();
   const isLoading = goalsLoading || categoriesLoading;
 
@@ -239,7 +239,7 @@ export default function GoalsManager() {
       {isFormOpen && (
         <GoalForm
           key={editingGoal?.id ?? "new"}
-          categories={categories}
+          categories={visibleCategories}
           goal={editingGoal}
           onSubmit={handleFormSubmit}
           onClose={handleCloseForm}

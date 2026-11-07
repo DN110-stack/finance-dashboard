@@ -53,7 +53,7 @@ export default function TransactionsTable() {
   const confirm = useConfirm();
   const { transactions, isLoading, addTransactions, deleteTransactions, setTransactionOneOff } =
     useTransactions();
-  const { categories, isLoading: categoriesLoading } = useCategories();
+  const { categories, visibleCategories, isLoading: categoriesLoading } = useCategories();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -560,7 +560,7 @@ export default function TransactionsTable() {
       <TransactionFilters
         filters={filters}
         onChange={setFilters}
-        categories={categories}
+        categories={visibleCategories}
         availableBanks={availableBanks}
         isSheetOpen={isFilterSheetOpen}
         onCloseSheet={() => setIsFilterSheetOpen(false)}
