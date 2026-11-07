@@ -3,12 +3,14 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { emitCategoryNameReplaced } from "../lib/categoryEvents";
+import type { CategoryKind } from "../lib/categoryKind";
 
 export type Category = {
   id: string;
   name: string;
   colour: string;
   parentCategory: string | null;
+  kind: CategoryKind;
 };
 
 // How many records of each kind still reference a category by name.
@@ -29,12 +31,18 @@ type CategoryUpdates = {
   name: string;
   colour: string;
   parentCategory: string | null;
+  kind: CategoryKind;
 };
 
 type CategoriesContextValue = {
   categories: Category[];
   isLoading: boolean;
-  addCategory: (name: string, colour: string, parentCategory?: string | null) => Promise<Category>;
+  addCategory: (
+    name: string,
+    colour: string,
+    parentCategory?: string | null,
+    kind?: CategoryKind
+  ) => Promise<Category>;
   updateCategory: (id: string, updates: CategoryUpdates) => Promise<Category>;
   getCategoryUsage: (id: string) => Promise<CategoryUsage>;
   // When anything still uses the category, `moveToId` names the category
@@ -68,7 +76,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
       const { data, error } = await supabase
         .from("categories")
-        .select("id, name, colour, parent_category")
+        .select("id, name, colour, parent_category, kind")
         .eq("user_id", user.id)
         .order("name", { ascending: true });
 
@@ -81,6 +89,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
             name: row.name,
             colour: row.colour,
             parentCategory: row.parent_category,
+            kind: row.kind,
           }))
         );
       }
@@ -98,7 +107,12 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
     };
   }, []);
 
-  async function addCategory(name: string, colour: string, parentCategory: string | null = null) {
+  async function addCategory(
+    name: string,
+    colour: string,
+    parentCategory: string | null = null,
+    kind: CategoryKind = "expense"
+  ) {
     const supabase = createClient();
     const {
       data: { user },
@@ -119,8 +133,8 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
     const { data, error } = await supabase
       .from("categories")
-      .insert({ user_id: user.id, name: trimmedName, colour, parent_category: parentCategory })
-      .select("id, name, colour, parent_category")
+      .insert({ user_id: user.id, name: trimmedName, colour, parent_category: parentCategory, kind })
+      .select("id, name, colour, parent_category, kind")
       .single();
 
     if (error) throw new Error(error.message);
@@ -130,6 +144,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
       name: data.name,
       colour: data.colour,
       parentCategory: data.parent_category,
+      kind: data.kind,
     };
 
     setCategories((prev) => sortByName([...prev, category]));
@@ -161,12 +176,18 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
     if (error) throw new Error(error.message);
 
+    // `kind` isn't part of the rename function — it never affects other
+    // tables, so it's a plain column update.
+    const { error: kindError } = await supabase.from("categories").update({ kind: updates.kind }).eq("id", id);
+    if (kindError) throw new Error(kindError.message);
+
     const previous = categories.find((c) => c.id === id);
     const category: Category = {
       id,
       name: trimmedName,
       colour: updates.colour,
       parentCategory: updates.parentCategory,
+      kind: updates.kind,
     };
 
     if (previous && previous.name !== trimmedName) {

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { MessageStream } from "@anthropic-ai/sdk/lib/MessageStream";
 import { Flame, Send, Sparkles } from "lucide-react";
-import { useTransactions } from "../context/TransactionsContext";
+import { useCategories } from "../context/CategoriesContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -21,7 +22,8 @@ const SUGGESTED_QUESTIONS = [
 const ROAST_PROMPT = "Roast my spending habits.";
 
 export default function ChatPanel() {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
+  const { categories } = useCategories();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -60,10 +62,18 @@ export default function ChatPanel() {
       // other dashboard calculation — they're a distraction from the user's
       // normal spending pattern, not part of it.
       const analyzedTransactions = transactions.filter((t) => !t.isOneOff);
+      // Transfers are already left out of `transactions`; the assistant is told
+      // which categories they were so it doesn't mistake the gap for missing data.
+      const transferCategories = categories.filter((c) => c.kind === "transfer").map((c) => c.name);
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question, transactions: analyzedTransactions, mode }),
+        body: JSON.stringify({
+          question,
+          transactions: analyzedTransactions,
+          transferCategories,
+          mode,
+        }),
       });
 
       if (!response.ok || !response.body) {

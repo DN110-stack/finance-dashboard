@@ -12,7 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useBudgets } from "../../context/BudgetsContext";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import { orderByParentPriority } from "../../lib/categories";
 import { filterTransactionsByPeriod, getPeriodRange, type PeriodState } from "../../lib/period";
 import { isMonthApplicable } from "../../lib/budgetPeriods";
@@ -45,7 +45,7 @@ function monthsInRange(from: string, to: string): string[] {
 
 export default function BudgetVsActualChart({ period }: { period: PeriodState }) {
   const { budgets } = useBudgets();
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
 
   const data = useMemo(() => {
     const range = getPeriodRange(period);

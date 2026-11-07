@@ -18,6 +18,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import { useSettings } from "../context/SettingsContext";
 import {
   filterTransactionsByPeriod,
@@ -143,7 +144,9 @@ function daysElapsedInPeriod(period: PeriodState, now: Date = new Date()): numbe
 }
 
 export default function SummaryCards({ period }: { period: PeriodState }) {
-  const { transactions, isLoading } = useTransactions();
+  const { transactions: allTransactions, isLoading: allLoading } = useTransactions();
+  const { transactions, isLoading: analysisLoading } = useAnalysisTransactions();
+  const isLoading = allLoading || analysisLoading;
   const { openingBalance, openingBalanceDate } = useSettings();
   const layout = useSyncExternalStore(
     summaryLayoutStore.subscribe,
@@ -192,7 +195,7 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
 
     // Current balance is deliberately all-time and includes one-off
     // transactions — it tracks the real account balance, not a period metric.
-    const currentBalance = computeCurrentBalance(transactions, openingBalance, openingBalanceDate);
+    const currentBalance = computeCurrentBalance(allTransactions, openingBalance, openingBalanceDate);
 
     const runwayDays =
       currentBalance !== null && currentBalance > 0 && avgDailySpend > 0
@@ -250,7 +253,7 @@ export default function SummaryCards({ period }: { period: PeriodState }) {
     };
     return record;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- today/monthEnd derive from the same render-time date as billOccurrences
-  }, [transactions, period, openingBalance, openingBalanceDate, billOccurrences]);
+  }, [transactions, allTransactions, period, openingBalance, openingBalanceDate, billOccurrences]);
 
   function updateSlot(index: number, type: SummaryStatType) {
     const next = [...layout] as SummaryLayout;

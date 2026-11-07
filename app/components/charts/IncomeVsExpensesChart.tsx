@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import {
   filterTransactionsByPeriod,
   formatMonthLabel,
@@ -31,7 +31,7 @@ const EXPENSE_COLOR = "#ef4444";
 type Series = "Income" | "Expenses";
 
 export default function IncomeVsExpensesChart({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
 
   const data = useMemo(() => {

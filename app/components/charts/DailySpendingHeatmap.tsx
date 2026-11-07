@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import {
   filterTransactionsByPeriod,
   getPeriodRange,
@@ -26,7 +26,7 @@ type DayCell = { iso: string; day: number; total: number };
 type MonthBlock = { monthKey: string; label: string; leadingBlanks: number; days: DayCell[] };
 
 export default function DailySpendingHeatmap({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
 
   const { months, maxTotal } = useMemo(() => {
     const range = getPeriodRange(period);

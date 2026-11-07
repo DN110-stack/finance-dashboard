@@ -22,6 +22,7 @@ import TransactionFilters, {
   PARENT_FILTER_PREFIX,
   type TransactionFilterState,
 } from "./TransactionFilters";
+import { transferCategoryNames } from "../lib/categoryKind";
 import { TableRowsSkeleton, Skeleton } from "../components/Skeleton";
 
 // How long a press has to be held before it counts as a long-press (enters
@@ -104,6 +105,7 @@ export default function TransactionsTable() {
 
   const filteredTransactions = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
+    const transferNames = transferCategoryNames(categories);
     const min = filters.amountMin.trim() === "" ? null : Number(filters.amountMin);
     const max = filters.amountMax.trim() === "" ? null : Number(filters.amountMax);
 
@@ -129,6 +131,7 @@ export default function TransactionsTable() {
       if (max !== null && !Number.isNaN(max) && t.amount > max) return false;
       if (filters.oneOff === "hide" && t.isOneOff) return false;
       if (filters.oneOff === "only" && !t.isOneOff) return false;
+      if (filters.transfers === "hide" && transferNames.has(t.category.toLowerCase())) return false;
       return true;
     });
   }, [transactions, filters, categories]);

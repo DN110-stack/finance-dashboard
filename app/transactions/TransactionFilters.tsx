@@ -8,6 +8,7 @@ import { UNCATEGORIZED } from "../lib/rules";
 import BottomSheet from "../components/BottomSheet";
 
 export type OneOffFilterValue = "" | "hide" | "only";
+export type TransfersFilterValue = "" | "hide";
 
 // Category filter values are prefixed so "Food" the parent (all Food-related
 // transactions) and "Food" the exact leaf category can both be selected —
@@ -28,6 +29,7 @@ export type TransactionFilterState = {
   amountMin: string;
   amountMax: string;
   oneOff: OneOffFilterValue;
+  transfers: TransfersFilterValue;
 };
 
 export const EMPTY_TRANSACTION_FILTERS: TransactionFilterState = {
@@ -39,6 +41,7 @@ export const EMPTY_TRANSACTION_FILTERS: TransactionFilterState = {
   amountMin: "",
   amountMax: "",
   oneOff: "",
+  transfers: "",
 };
 
 // Counts distinct filter *groups* in use — date-from/to count as one group,
@@ -52,6 +55,7 @@ export function countActiveTransactionFilters(filters: TransactionFilterState): 
     filters.dateFrom !== "" || filters.dateTo !== "",
     filters.amountMin !== "" || filters.amountMax !== "",
     filters.oneOff !== "",
+    filters.transfers !== "",
   ].filter(Boolean).length;
 }
 
@@ -59,7 +63,9 @@ export function countActiveTransactionFilters(filters: TransactionFilterState): 
 // used by dashboard chart drill-downs so "View in Transactions" lands on
 // exactly the same rows the drill-down panel showed.
 export function buildTransactionsHref(filters: Partial<TransactionFilterState>): string {
-  const merged = { ...EMPTY_TRANSACTION_FILTERS, ...filters };
+  // Links come from dashboard drill-downs, whose figures leave transfers
+  // out — so the transactions they open do too, unless a link says otherwise.
+  const merged = { ...EMPTY_TRANSACTION_FILTERS, transfers: "hide" as const, ...filters };
   const params = new URLSearchParams();
 
   if (merged.search) params.set("search", merged.search);
@@ -70,6 +76,7 @@ export function buildTransactionsHref(filters: Partial<TransactionFilterState>):
   if (merged.amountMin) params.set("amountMin", merged.amountMin);
   if (merged.amountMax) params.set("amountMax", merged.amountMax);
   if (merged.oneOff) params.set("oneOff", merged.oneOff);
+  if (merged.transfers) params.set("transfers", merged.transfers);
 
   const query = params.toString();
   return query ? `/transactions?${query}` : "/transactions";
@@ -88,6 +95,7 @@ export function filtersFromSearchParams(params: URLSearchParams): TransactionFil
     amountMin: params.get("amountMin") ?? "",
     amountMax: params.get("amountMax") ?? "",
     oneOff: oneOff === "hide" || oneOff === "only" ? oneOff : "",
+    transfers: params.get("transfers") === "hide" ? "hide" : "",
   };
 }
 
@@ -254,6 +262,18 @@ export default function TransactionFilters({
             <option value="">All transactions</option>
             <option value="hide">Hide one-off</option>
             <option value="only">Only one-off</option>
+          </select>
+        </div>
+
+        <div>
+          <label className={labelClasses}>Transfers</label>
+          <select
+            value={filters.transfers}
+            onChange={(e) => set("transfers", e.target.value as TransfersFilterValue)}
+            className={fieldClasses}
+          >
+            <option value="">Show transfers</option>
+            <option value="hide">Hide transfers</option>
           </select>
         </div>
       </div>

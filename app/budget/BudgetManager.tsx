@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Copy, PiggyBank, Plus, X } from "lucide-reac
 import { useBudgets, type Budget } from "../context/BudgetsContext";
 import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
-import { useTransactions } from "../context/TransactionsContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import { useSettings } from "../context/SettingsContext";
 import { orderByParentPriority } from "../lib/categories";
 import { formatMonthLabel, formatPeriodLabel, getMonthRange } from "../lib/period";
@@ -84,7 +84,7 @@ export default function BudgetManager() {
   } = useBudgets();
   const { annualBudgets } = useAnnualBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions({ respectOneOffToggle: false });
   const { financialYearPreference: fyPreference } = useSettings();
   const isLoading = budgetsLoading || categoriesLoading;
 

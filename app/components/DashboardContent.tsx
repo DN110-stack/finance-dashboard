@@ -9,6 +9,7 @@ import ChartsSection from "./ChartsSection";
 import BudgetWidget from "./BudgetWidget";
 import GoalsWidget from "./GoalsWidget";
 import DashboardSection from "./DashboardSection";
+import { excludeOneOffsStore } from "../lib/analysisSettings";
 import { DEFAULT_PERIOD, getPeriodRange, type PeriodState } from "../lib/period";
 import {
   dashboardLayoutStore,
@@ -29,6 +30,11 @@ export default function DashboardContent() {
     dashboardLayoutStore.subscribe,
     dashboardLayoutStore.getSnapshot,
     dashboardLayoutStore.getServerSnapshot
+  );
+  const excludeOneOffs = useSyncExternalStore(
+    excludeOneOffsStore.subscribe,
+    excludeOneOffsStore.getSnapshot,
+    excludeOneOffsStore.getServerSnapshot
   );
   const isCustomIncomplete = period.option === "custom" && !getPeriodRange(period);
 
@@ -51,6 +57,15 @@ export default function DashboardContent() {
     <>
       <div className="mt-6">
         <PeriodSelector value={period} onChange={setPeriod} />
+        <label className="mt-2 flex min-h-[44px] w-fit cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+          <input
+            type="checkbox"
+            checked={excludeOneOffs}
+            onChange={(e) => excludeOneOffsStore.set(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Exclude one-offs
+        </label>
         {isCustomIncomplete && (
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
             Choose both a from and to date to see this period.

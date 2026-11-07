@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTransactions } from "../context/TransactionsContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import { useCategories } from "../context/CategoriesContext";
 import { getCategoryColor, orderByParentPriority, resolveGroupName } from "../lib/categories";
 import {
@@ -26,7 +26,7 @@ import EmptyChartState from "./charts/EmptyChartState";
 import DrillDownPanel, { type DrillDownData } from "./charts/DrillDownPanel";
 
 export default function MonthlyCategoryChart({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
   const { categories: userCategories } = useCategories();
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
 

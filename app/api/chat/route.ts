@@ -7,7 +7,11 @@ const client = new Anthropic();
 
 type ChatMode = "chat" | "roast";
 
-function buildSystemPrompt(transactions: Transaction[], mode: ChatMode): string {
+function buildSystemPrompt(
+  transactions: Transaction[],
+  mode: ChatMode,
+  transferCategories: string[]
+): string {
   const today = new Date().toISOString().slice(0, 10);
 
   const base = [
@@ -15,6 +19,11 @@ function buildSystemPrompt(transactions: Transaction[], mode: ChatMode): string 
     "You are a financial assistant with access to the user's transaction history.",
     "Only use the transaction data below to answer — never invent figures, merchants, or categories.",
     "Amounts are in dollars: positive values are income/credits, negative values are expenses/debits.",
+    ...(transferCategories.length > 0
+      ? [
+          `Transfers between the user's own accounts and credit card payments have been left out of the data (categories: ${transferCategories.join(", ")}). They are neither income nor spending, so never count them as either.`,
+        ]
+      : []),
   ];
 
   const toneInstructions =
@@ -46,6 +55,9 @@ export async function POST(request: Request) {
   const question = typeof body?.question === "string" ? body.question.trim() : "";
   const transactions: Transaction[] = Array.isArray(body?.transactions) ? body.transactions : [];
   const mode: ChatMode = body?.mode === "roast" ? "roast" : "chat";
+  const transferCategories: string[] = Array.isArray(body?.transferCategories)
+    ? body.transferCategories.filter((name: unknown): name is string => typeof name === "string")
+    : [];
 
   if (!question) {
     return new Response("Missing question", { status: 400 });
@@ -54,7 +66,7 @@ export async function POST(request: Request) {
   const stream = client.messages.stream({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
-    system: buildSystemPrompt(transactions, mode),
+    system: buildSystemPrompt(transactions, mode, transferCategories),
     messages: [{ role: "user", content: question }],
   });
 

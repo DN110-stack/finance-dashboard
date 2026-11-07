@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import { filterTransactionsByPeriod, formatMonthLabel, type PeriodState } from "../../lib/period";
 import EmptyChartState from "./EmptyChartState";
 
@@ -20,7 +20,7 @@ import EmptyChartState from "./EmptyChartState";
 const LINE_COLOR = "#2a78d6";
 
 export default function SavingsRateTrendChart({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
 
   const data = useMemo(() => {
     const periodTransactions = filterTransactionsByPeriod(

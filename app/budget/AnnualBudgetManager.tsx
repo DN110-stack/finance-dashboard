@@ -5,7 +5,7 @@ import { useConfirm } from "../components/ConfirmDialog";
 import { ChevronLeft, ChevronRight, CircleCheck, PiggyBank, Plus, TriangleAlert, X } from "lucide-react";
 import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
-import { useTransactions } from "../context/TransactionsContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import { useSettings } from "../context/SettingsContext";
 import { orderByParentPriority } from "../lib/categories";
 import {
@@ -65,7 +65,7 @@ export default function AnnualBudgetManager() {
     deleteAnnualBudget,
   } = useAnnualBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions({ respectOneOffToggle: false });
   const { financialYearPreference: fyPreference } = useSettings();
   const isLoading = annualBudgetsLoading || categoriesLoading;
 

@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import { filterTransactionsByPeriod, formatPeriodLabel, getPeriodRange, type PeriodState } from "../../lib/period";
 import { extractKeyword } from "../../lib/rules";
 import { buildTransactionsHref } from "../../transactions/TransactionFilters";
@@ -24,7 +24,7 @@ function merchantKeyFor(description: string): string {
 }
 
 export default function TopMerchantsChart({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
 
   const data = useMemo(() => {

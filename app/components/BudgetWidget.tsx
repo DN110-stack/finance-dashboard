@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ChevronDown, CircleCheck, TriangleAlert, Wallet } from "lucide-react";
 import { useBudgets } from "../context/BudgetsContext";
 import { useCategories } from "../context/CategoriesContext";
-import { useTransactions } from "../context/TransactionsContext";
+import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import type { Transaction } from "../lib/csv";
 import { calculatePace, getCurrentMonthKey, type PaceStatus } from "../lib/budgets";
 import { isMonthApplicable } from "../lib/budgetPeriods";
@@ -50,7 +50,7 @@ function sumCategorySpent(transactions: Transaction[], category: string, monthKe
 export default function BudgetWidget() {
   const { budgets, budgetGroups, isLoading: budgetsLoading } = useBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions({ respectOneOffToggle: false });
   const isLoading = budgetsLoading || categoriesLoading;
 
   const storedLayout = useSyncExternalStore(

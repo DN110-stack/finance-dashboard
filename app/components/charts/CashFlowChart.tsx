@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useTransactions } from "../../context/TransactionsContext";
+import { useAnalysisTransactions } from "../../lib/useAnalysisTransactions";
 import {
   filterTransactionsByPeriod,
   formatPeriodLabel,
@@ -33,7 +33,7 @@ function formatDateLabel(iso: string) {
 type DotProps = { cx?: number; cy?: number; payload?: { iso: string } };
 
 export default function CashFlowChart({ period }: { period: PeriodState }) {
-  const { transactions } = useTransactions();
+  const { transactions } = useAnalysisTransactions();
   const [drillDown, setDrillDown] = useState<DrillDownData | null>(null);
 
   const data = useMemo(() => {

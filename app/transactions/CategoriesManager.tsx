@@ -9,6 +9,13 @@ import {
   type CategoryUsage,
 } from "../context/CategoriesContext";
 import { useConfirm } from "../components/ConfirmDialog";
+import {
+  CATEGORY_KINDS,
+  CATEGORY_KIND_HINTS,
+  CATEGORY_KIND_LABELS,
+  defaultKindForParent,
+  type CategoryKind,
+} from "../lib/categoryKind";
 import { PARENT_CATEGORIES, distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
 
 const USAGE_LABELS: [keyof CategoryUsage, string, string][] = [
@@ -25,6 +32,49 @@ function describeUsage(usage: CategoryUsage): string {
   return USAGE_LABELS.filter(([key]) => usage[key] > 0)
     .map(([key, singular, plural]) => `${usage[key]} ${usage[key] === 1 ? singular : plural}`)
     .join(", ");
+}
+
+function KindBadge({ kind }: { kind: CategoryKind }) {
+  if (kind === "expense") return null;
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+        kind === "transfer"
+          ? "bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300"
+          : "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+      }`}
+    >
+      {CATEGORY_KIND_LABELS[kind]}
+    </span>
+  );
+}
+
+function KindSelect({
+  id,
+  value,
+  onChange,
+  className,
+}: {
+  id?: string;
+  value: CategoryKind;
+  onChange: (value: CategoryKind) => void;
+  className: string;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(event) => onChange(event.target.value as CategoryKind)}
+      title={CATEGORY_KIND_HINTS[value]}
+      className={className}
+    >
+      {CATEGORY_KINDS.map((kind) => (
+        <option key={kind} value={kind}>
+          {CATEGORY_KIND_LABELS[kind]}
+        </option>
+      ))}
+    </select>
+  );
 }
 
 const DEFAULT_COLOUR = "#3b82f6";
@@ -60,6 +110,8 @@ export default function CategoriesManager() {
   const [name, setName] = useState("");
   const [colour, setColour] = useState(DEFAULT_COLOUR);
   const [colourTouched, setColourTouched] = useState(false);
+  const [kind, setKind] = useState<CategoryKind>("expense");
+  const [kindTouched, setKindTouched] = useState(false);
   const [parentSelection, setParentSelection] = useState<string>(UNGROUPED);
   const [newParentName, setNewParentName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +127,7 @@ export default function CategoriesManager() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editColour, setEditColour] = useState(DEFAULT_COLOUR);
+  const [editKind, setEditKind] = useState<CategoryKind>("expense");
   const [editParentSelection, setEditParentSelection] = useState<string>(UNGROUPED);
   const [editNewParentName, setEditNewParentName] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
@@ -99,6 +152,11 @@ export default function CategoriesManager() {
 
   function handleParentChange(value: string) {
     setParentSelection(value);
+    if (!kindTouched) {
+      setKind(
+        value === UNGROUPED || value === NEW_PARENT_VALUE ? "expense" : defaultKindForParent(value, categories)
+      );
+    }
     // Only auto-follow the parent's colour until the user has manually
     // picked one themselves for this new category.
     if (colourTouched) return;
@@ -118,8 +176,10 @@ export default function CategoriesManager() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await addCategory(name.trim(), colour, parentCategory);
+      await addCategory(name.trim(), colour, parentCategory, kind);
       setName("");
+      setKind("expense");
+      setKindTouched(false);
       setColour(DEFAULT_COLOUR);
       setColourTouched(false);
       setParentSelection(UNGROUPED);
@@ -184,6 +244,7 @@ export default function CategoriesManager() {
     setEditingId(category.id);
     setEditName(category.name);
     setEditColour(category.colour);
+    setEditKind(category.kind);
     setEditParentSelection(category.parentCategory ?? UNGROUPED);
     setEditNewParentName("");
     setEditError(null);
@@ -223,7 +284,12 @@ export default function CategoriesManager() {
     setIsSavingEdit(true);
     setEditError(null);
     try {
-      await updateCategory(category.id, { name: trimmedName, colour: editColour, parentCategory });
+      await updateCategory(category.id, {
+        name: trimmedName,
+        colour: editColour,
+        parentCategory,
+        kind: editKind,
+      });
       setEditingId(null);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update category");
@@ -290,6 +356,21 @@ export default function CategoriesManager() {
         )}
 
         <div className="flex flex-col gap-1">
+          <label htmlFor="category-kind" className="text-sm font-medium">
+            Type
+          </label>
+          <KindSelect
+            id="category-kind"
+            value={kind}
+            onChange={(value) => {
+              setKind(value);
+              setKindTouched(true);
+            }}
+            className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
           <label htmlFor="category-colour" className="text-sm font-medium">
             Colour
           </label>
@@ -344,6 +425,7 @@ export default function CategoriesManager() {
                     style={{ backgroundColor: category.colour }}
                   />
                   <span className="text-sm font-medium">{category.name}</span>
+                  <KindBadge kind={category.kind} />
                 </li>
               ))}
             </ul>
@@ -425,6 +507,17 @@ export default function CategoriesManager() {
 
                               <div className="flex flex-col gap-1">
                                 <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                                  Type
+                                </label>
+                                <KindSelect
+                                  value={editKind}
+                                  onChange={setEditKind}
+                                  className="rounded-md border border-black/10 bg-transparent px-2 py-1.5 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+                                />
+                              </div>
+
+                              <div className="flex flex-col gap-1">
+                                <label className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
                                   Colour
                                 </label>
                                 <div className="flex items-center gap-2">
@@ -474,6 +567,7 @@ export default function CategoriesManager() {
                                   style={{ backgroundColor: category.colour }}
                                 />
                                 <span className="text-sm font-medium">{category.name}</span>
+                                <KindBadge kind={category.kind} />
                               </div>
                               <div className="flex items-center gap-1">
                                 <button
