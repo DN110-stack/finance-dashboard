@@ -32,14 +32,16 @@ export default function BillForm({
   const [matchKeyword, setMatchKeyword] = useState(bill?.matchKeyword ?? "");
   const [error, setError] = useState<string | null>(null);
 
+  const isOneOff = frequency === "once";
+
   async function handleSubmit() {
     const parsedAmount = Number(amount);
     if (!name.trim()) return setError("Give the bill a name.");
     if (!amount || !Number.isFinite(parsedAmount) || parsedAmount < 0) {
       return setError("Enter a valid amount.");
     }
-    if (!dueDate) return setError("Choose the first due date.");
-    if (endDate && endDate < dueDate) return setError("The end date can't be before the first due date.");
+    if (!dueDate) return setError(isOneOff ? "Choose the due date." : "Choose the first due date.");
+    if (!isOneOff && endDate && endDate < dueDate) return setError("The end date can't be before the first due date.");
 
     setError(null);
     try {
@@ -48,7 +50,7 @@ export default function BillForm({
         amount: parsedAmount,
         frequency,
         dueDate,
-        endDate: endDate || null,
+        endDate: isOneOff ? null : endDate || null,
         category: category || null,
         amountVaries,
         matchKeyword: matchKeyword.trim() || null,
@@ -136,7 +138,7 @@ export default function BillForm({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="flex flex-col gap-1 text-sm font-medium">
-            Next due date
+            {isOneOff ? "Due date" : "Next due date"}
             <input
               type="date"
               value={dueDate}
@@ -144,15 +146,17 @@ export default function BillForm({
               className={inputClass}
             />
           </label>
-          <label className="flex flex-col gap-1 text-sm font-medium">
-            Ends (optional)
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className={inputClass}
-            />
-          </label>
+          {!isOneOff && (
+            <label className="flex flex-col gap-1 text-sm font-medium">
+              Ends (optional)
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className={inputClass}
+              />
+            </label>
+          )}
         </div>
 
         <label className="flex flex-col gap-1 text-sm font-medium">

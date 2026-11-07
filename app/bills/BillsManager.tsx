@@ -271,7 +271,9 @@ export default function BillsManager() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{bill.name}</p>
                   <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                    {BILL_FREQUENCY_LABELS[bill.frequency]}
+                    {bill.frequency === "once"
+                      ? `One-off · due ${bill.dueDate}`
+                      : BILL_FREQUENCY_LABELS[bill.frequency]}
                     {bill.category ? ` · ${bill.category}` : ""}
                     {bill.endDate ? ` · ends ${bill.endDate}` : ""}
                     {bill.isActive ? "" : " · paused"}

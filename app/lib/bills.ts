@@ -2,6 +2,7 @@ import type { Transaction } from "./csv";
 import { parseISODate, toISODate } from "./period";
 
 export type BillFrequency =
+  | "once"
   | "weekly"
   | "fortnightly"
   | "monthly"
@@ -10,6 +11,7 @@ export type BillFrequency =
   | "annual";
 
 export const BILL_FREQUENCIES: BillFrequency[] = [
+  "once",
   "weekly",
   "fortnightly",
   "monthly",
@@ -19,6 +21,7 @@ export const BILL_FREQUENCIES: BillFrequency[] = [
 ];
 
 export const BILL_FREQUENCY_LABELS: Record<BillFrequency, string> = {
+  once: "One-off",
   weekly: "Weekly",
   fortnightly: "Fortnightly",
   monthly: "Monthly",
@@ -32,7 +35,7 @@ export type Bill = {
   name: string;
   amount: number;
   frequency: BillFrequency;
-  dueDate: string; // "YYYY-MM-DD" — the anchor every later due date derives from
+  dueDate: string; // "YYYY-MM-DD" — the anchor every later due date derives from (the only one, for a one-off)
   endDate: string | null;
   category: string | null;
   amountVaries: boolean; // amount is an estimate (e.g. utilities)
@@ -87,6 +90,11 @@ function nthDueDate(bill: Bill, n: number): Date {
 
 // Every due date of `bill` inside the inclusive [from, to] range.
 export function dueDatesInRange(bill: Bill, from: string, to: string): string[] {
+  // A one-off bill has a single due date and never repeats.
+  if (bill.frequency === "once") {
+    return bill.dueDate >= from && bill.dueDate <= to ? [bill.dueDate] : [];
+  }
+
   const dates: string[] = [];
   // Generous cap so a malformed far-past anchor can never loop forever.
   for (let n = 0; n < 5000; n++) {
@@ -200,6 +208,8 @@ export function buildBillSchedule({
 // What a bill costs per month, averaged — used for the Bills page totals.
 export function monthlyCost(bill: Bill): number {
   switch (bill.frequency) {
+    case "once":
+      return 0; // one-offs aren't a running cost, so they're left out of monthly/yearly totals
     case "weekly":
       return (bill.amount * 52) / 12;
     case "fortnightly":
