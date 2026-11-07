@@ -21,7 +21,7 @@ export default function BillForm({
   onClose: () => void;
   isSaving: boolean;
 }) {
-  const { categories } = useCategories();
+  const { visibleCategories: categories } = useCategories();
   const [name, setName] = useState(bill?.name ?? "");
   const [amount, setAmount] = useState(bill ? String(bill.amount) : "");
   const [frequency, setFrequency] = useState<BillFrequency>(bill?.frequency ?? "monthly");

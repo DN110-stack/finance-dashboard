@@ -54,7 +54,7 @@ export default function UncategorizedReview({
   suggestionsLoading?: boolean;
   onClose: () => void;
 }) {
-  const { categories, addCategory } = useCategories();
+  const { categories, visibleCategories, addCategory } = useCategories();
   const { assignCategory, assignCategories } = useTransactions();
   const [pending, setPending] = useState(transactions);
   const [selections, setSelections] = useState<Record<string, string>>({});
@@ -77,7 +77,7 @@ export default function UncategorizedReview({
     [pending, suggestions, categories]
   );
 
-  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+  const groups = useMemo(() => groupCategoriesByParent(visibleCategories), [visibleCategories]);
   const parentOptions = useMemo(() => distinctParents(categories), [categories]);
 
   function selectionFor(id: string) {

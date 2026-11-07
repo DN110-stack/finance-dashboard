@@ -96,7 +96,7 @@ export default function DashboardContent() {
           onMoveDown={() => handleMove(index, 1)}
         >
           {sectionId === "charts" && <ChartsSection period={period} />}
-          {sectionId === "budgets" && <BudgetWidget />}
+          {sectionId === "budgets" && <BudgetWidget period={period} />}
           {sectionId === "goals" && <GoalsWidget />}
         </DashboardSection>
       ))}

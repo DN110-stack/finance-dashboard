@@ -6,7 +6,7 @@ import { useCategories, type Category } from "../context/CategoriesContext";
 import type { NewGoalInput } from "../context/GoalsContext";
 import type { Goal, GoalType } from "../lib/goals";
 import { dateToMonthInput, GOAL_COLOUR_OPTIONS, GOAL_EMOJI_OPTIONS, monthInputToDate } from "../lib/goals";
-import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR, PARENT_CATEGORIES } from "../lib/categories";
+import { CATEGORY_COLORS, DEFAULT_CATEGORY_COLOR, corePresetNames } from "../lib/categories";
 import BottomSheet from "../components/BottomSheet";
 
 const TYPE_OPTIONS: { value: GoalType; label: string; icon: typeof PiggyBank }[] = [
@@ -48,7 +48,10 @@ export default function GoalForm({
   const { addCategory } = useCategories();
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryParent, setNewCategoryParent] = useState<string>(PARENT_CATEGORIES[PARENT_CATEGORIES.length - 1]);
+  const [newCategoryParent, setNewCategoryParent] = useState<string>(() => {
+    const presets = corePresetNames(categories);
+    return presets[presets.length - 1];
+  });
   const [isSavingCategory, setIsSavingCategory] = useState(false);
   const [newCategoryError, setNewCategoryError] = useState<string | null>(null);
 
@@ -58,7 +61,8 @@ export default function GoalForm({
   function handleOpenAddCategory() {
     setIsAddingCategory(true);
     setNewCategoryName("");
-    setNewCategoryParent(PARENT_CATEGORIES[PARENT_CATEGORIES.length - 1]);
+    const presets = corePresetNames(categories);
+    setNewCategoryParent(presets[presets.length - 1]);
     setNewCategoryError(null);
   }
 
@@ -315,7 +319,7 @@ export default function GoalForm({
                     onChange={(e) => setNewCategoryParent(e.target.value)}
                     className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
                   >
-                    {PARENT_CATEGORIES.map((parent) => (
+                    {corePresetNames(categories).map((parent) => (
                       <option key={parent} value={parent}>
                         {parent}
                       </option>

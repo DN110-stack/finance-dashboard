@@ -66,7 +66,20 @@ export type CategoryWithParent = {
   name: string;
   colour: string;
   parentCategory: string | null;
+  // Permanent identity of a core category ("Housing"), kept when the user
+  // renames it — so ordering and parent pickers follow the row, not its label.
+  coreKey?: string | null;
+  isHidden?: boolean;
 };
+
+// The 11 core parents in their fixed order, under whatever name each is
+// currently called. Falls back to the original name for a core row that
+// can't be found.
+export function corePresetNames(categories: { name: string; coreKey?: string | null }[]): string[] {
+  return PARENT_CATEGORIES.map(
+    (key) => categories.find((c) => c.coreKey === key)?.name ?? key
+  );
+}
 
 // Groups categories under their parent, ordered PARENT_CATEGORIES first, then
 // any custom parents alphabetically, then an "Ungrouped" bucket last.
@@ -74,6 +87,7 @@ export type CategoryWithParent = {
 export function groupCategoriesByParent<T extends CategoryWithParent>(
   categories: T[]
 ): { parent: string; categories: T[] }[] {
+  const presets = corePresetNames(categories);
   const byParent = new Map<string, T[]>();
 
   for (const category of categories) {
@@ -83,9 +97,9 @@ export function groupCategoriesByParent<T extends CategoryWithParent>(
     else byParent.set(key, [category]);
   }
 
-  const presetParents = PARENT_CATEGORIES.filter((parent) => byParent.has(parent));
+  const presetParents = presets.filter((parent) => byParent.has(parent));
   const customParents = Array.from(byParent.keys())
-    .filter((parent) => parent !== UNGROUPED && !(PARENT_CATEGORIES as readonly string[]).includes(parent))
+    .filter((parent) => parent !== UNGROUPED && !presets.includes(parent))
     .sort((a, b) => a.localeCompare(b));
   const orderedKeys = [...presetParents, ...customParents];
   if (byParent.has(UNGROUPED)) orderedKeys.push(UNGROUPED);
@@ -100,12 +114,13 @@ export function groupCategoriesByParent<T extends CategoryWithParent>(
 // offered, even before any categories exist) plus any custom parent names
 // already in use, alphabetically after the presets.
 export function distinctParents(categories: CategoryWithParent[]): string[] {
+  const presets = corePresetNames(categories);
   const custom = new Set<string>();
   for (const category of categories) {
     const key = category.parentCategory?.trim();
-    if (key && !(PARENT_CATEGORIES as readonly string[]).includes(key)) custom.add(key);
+    if (key && !presets.includes(key)) custom.add(key);
   }
-  return [...PARENT_CATEGORIES, ...Array.from(custom).sort((a, b) => a.localeCompare(b))];
+  return [...presets, ...Array.from(custom).sort((a, b) => a.localeCompare(b))];
 }
 
 // Resolves a transaction's leaf category name to its parent group name, for
@@ -124,11 +139,15 @@ export function resolveGroupName(
 // parents first (in PARENT_CATEGORIES order), then anything else (custom
 // parents, unmatched leaf names) alphabetically — so colour-to-series mapping
 // stays fixed rather than shifting between renders.
-export function orderByParentPriority(names: Iterable<string>): string[] {
+export function orderByParentPriority(
+  names: Iterable<string>,
+  categories?: { name: string; coreKey?: string | null }[]
+): string[] {
   const set = new Set(names);
-  const preset = PARENT_CATEGORIES.filter((parent) => set.has(parent));
+  const presets = categories ? corePresetNames(categories) : [...PARENT_CATEGORIES];
+  const preset = presets.filter((parent) => set.has(parent));
   const rest = Array.from(set)
-    .filter((name) => !(PARENT_CATEGORIES as readonly string[]).includes(name))
+    .filter((name) => !presets.includes(name))
     .sort((a, b) => a.localeCompare(b));
   return [...preset, ...rest];
 }

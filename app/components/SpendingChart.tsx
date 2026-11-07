@@ -34,7 +34,7 @@ export default function SpendingChart({ period }: { period: PeriodState }) {
       totals.set(group, (totals.get(group) ?? 0) + Math.abs(transaction.amount));
     }
 
-    const order = orderByParentPriority(totals.keys());
+    const order = orderByParentPriority(totals.keys(), categories);
     return order.map((category) => ({
       category,
       total: Math.round((totals.get(category) ?? 0) * 100) / 100,

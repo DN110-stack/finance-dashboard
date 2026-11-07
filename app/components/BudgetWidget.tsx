@@ -7,7 +7,8 @@ import { useBudgets } from "../context/BudgetsContext";
 import { useCategories } from "../context/CategoriesContext";
 import { useAnalysisTransactions } from "../lib/useAnalysisTransactions";
 import type { Transaction } from "../lib/csv";
-import { calculatePace, getCurrentMonthKey, type PaceStatus } from "../lib/budgets";
+import { calculatePace, getCurrentMonthKey, shiftMonthKey, type PaceStatus } from "../lib/budgets";
+import { formatPeriodLabel, getPeriodRange, toISODate, type PeriodState } from "../lib/period";
 import { isMonthApplicable } from "../lib/budgetPeriods";
 import {
   budgetLayoutStore,
@@ -35,19 +36,35 @@ type BudgetWidgetItem = {
   pace: PaceStatus | null;
 };
 
-function sumCategorySpent(transactions: Transaction[], category: string, monthKey: string): number {
+// Every "YYYY-MM" month the [from, to] range touches, oldest first.
+function monthKeysInRange(from: string, to: string): string[] {
+  const keys: string[] = [];
+  let cursor = from.slice(0, 7);
+  const last = to.slice(0, 7);
+  for (let i = 0; cursor <= last && i < 600; i++) {
+    keys.push(cursor);
+    cursor = shiftMonthKey(cursor, 1);
+  }
+  return keys;
+}
+
+function sumCategorySpent(
+  transactions: Transaction[],
+  category: string,
+  range: { from: string; to: string }
+): number {
   const target = category.toLowerCase();
   let total = 0;
   for (const t of transactions) {
     if (t.amount >= 0 || t.isOneOff) continue;
-    if (t.date.slice(0, 7) !== monthKey) continue;
+    if (t.date < range.from || t.date > range.to) continue;
     if (t.category.toLowerCase() !== target) continue;
     total += Math.abs(t.amount);
   }
   return total;
 }
 
-export default function BudgetWidget() {
+export default function BudgetWidget({ period }: { period: PeriodState }) {
   const { budgets, budgetGroups, isLoading: budgetsLoading } = useBudgets();
   const { categories, isLoading: categoriesLoading } = useCategories();
   const { transactions } = useAnalysisTransactions({ respectOneOffToggle: false });
@@ -59,44 +76,113 @@ export default function BudgetWidget() {
     budgetLayoutStore.getServerSnapshot
   );
 
-  // Only this month's applicable budgets/groups are candidates — the widget
-  // is a live "how am I doing right now" snapshot, not a historical browser.
+  const range = useMemo(() => getPeriodRange(period), [period]);
+
+  // Budgets follow the dashboard's period. A single calendar month shows
+  // that month's budgets against that month's spending. A longer range adds
+  // each month's budget up month by month and compares it with spending
+  // across the whole range.
   const items = useMemo<BudgetWidgetItem[]>(() => {
-    const monthKey = getCurrentMonthKey();
+    if (!range) return [];
+
+    const months = monthKeysInRange(range.from, range.to);
     const categoryByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
+    const colourFor = (name: string) => categoryByName.get(name.toLowerCase())?.colour ?? DEFAULT_SWATCH_COLOUR;
     const list: BudgetWidgetItem[] = [];
 
+    // Pace only means something for the current month, viewed as a whole month.
+    const monthKey = months[0];
+    const [year, month] = monthKey.split("-").map(Number);
+    const coversWholeMonth =
+      months.length === 1 &&
+      range.from === toISODate(new Date(year, month - 1, 1)) &&
+      range.to === toISODate(new Date(year, month, 0));
+    const paceFor = (spent: number, amount: number) =>
+      coversWholeMonth && monthKey === getCurrentMonthKey() ? calculatePace(spent, amount, monthKey) : null;
+
+    if (months.length === 1) {
+      for (const b of budgets) {
+        if (!isMonthApplicable(b.month, b.periodType, monthKey)) continue;
+        const spent = sumCategorySpent(transactions, b.category, range);
+        list.push({
+          key: `single:${b.id}`,
+          name: b.category,
+          colour: colourFor(b.category),
+          amount: b.amount,
+          spent,
+          percent: b.amount > 0 ? (spent / b.amount) * 100 : 0,
+          pace: paceFor(spent, b.amount),
+        });
+      }
+
+      for (const g of budgetGroups) {
+        if (g.month !== monthKey) continue;
+        const spent = g.categories.reduce((sum, name) => sum + sumCategorySpent(transactions, name, range), 0);
+        const swatchCategory = g.categories.map((name) => categoryByName.get(name.toLowerCase())).find(Boolean);
+        list.push({
+          key: `group:${g.id}`,
+          name: g.name,
+          colour: swatchCategory?.colour ?? DEFAULT_SWATCH_COLOUR,
+          amount: g.amount,
+          spent,
+          percent: g.amount > 0 ? (spent / g.amount) * 100 : 0,
+          pace: paceFor(spent, g.amount),
+        });
+      }
+
+      return list;
+    }
+
+    // Several months: one entry per category / group, budgets summed.
+    const amountByCategory = new Map<string, { name: string; amount: number }>();
     for (const b of budgets) {
-      if (!isMonthApplicable(b.month, b.periodType, monthKey)) continue;
-      const spent = sumCategorySpent(transactions, b.category, monthKey);
+      for (const m of months) {
+        if (!isMonthApplicable(b.month, b.periodType, m)) continue;
+        const key = b.category.toLowerCase();
+        const entry = amountByCategory.get(key) ?? { name: b.category, amount: 0 };
+        entry.amount += b.amount;
+        amountByCategory.set(key, entry);
+      }
+    }
+    for (const [key, { name, amount }] of amountByCategory) {
+      const spent = sumCategorySpent(transactions, name, range);
       list.push({
-        key: `single:${b.id}`,
-        name: b.category,
-        colour: categoryByName.get(b.category.toLowerCase())?.colour ?? DEFAULT_SWATCH_COLOUR,
-        amount: b.amount,
+        key: `single:cat:${key}`,
+        name,
+        colour: colourFor(name),
+        amount,
         spent,
-        percent: b.amount > 0 ? (spent / b.amount) * 100 : 0,
-        pace: calculatePace(spent, b.amount, monthKey),
+        percent: amount > 0 ? (spent / amount) * 100 : 0,
+        pace: null,
       });
     }
 
+    const groupsByName = new Map<string, { name: string; amount: number; categories: Set<string> }>();
     for (const g of budgetGroups) {
-      if (g.month !== monthKey) continue;
-      const spent = g.categories.reduce((sum, name) => sum + sumCategorySpent(transactions, name, monthKey), 0);
-      const swatchCategory = g.categories.map((name) => categoryByName.get(name.toLowerCase())).find(Boolean);
+      if (!months.includes(g.month)) continue;
+      const key = g.name.toLowerCase();
+      const entry = groupsByName.get(key) ?? { name: g.name, amount: 0, categories: new Set<string>() };
+      entry.amount += g.amount;
+      g.categories.forEach((name) => entry.categories.add(name));
+      groupsByName.set(key, entry);
+    }
+    for (const [key, { name, amount, categories: groupCategories }] of groupsByName) {
+      const names = [...groupCategories];
+      const spent = names.reduce((sum, categoryName) => sum + sumCategorySpent(transactions, categoryName, range), 0);
+      const swatchCategory = names.map((n) => categoryByName.get(n.toLowerCase())).find(Boolean);
       list.push({
-        key: `group:${g.id}`,
-        name: g.name,
+        key: `group:name:${key}`,
+        name,
         colour: swatchCategory?.colour ?? DEFAULT_SWATCH_COLOUR,
-        amount: g.amount,
+        amount,
         spent,
-        percent: g.amount > 0 ? (spent / g.amount) * 100 : 0,
-        pace: calculatePace(spent, g.amount, monthKey),
+        percent: amount > 0 ? (spent / amount) * 100 : 0,
+        pace: null,
       });
     }
 
     return list;
-  }, [budgets, budgetGroups, categories, transactions]);
+  }, [budgets, budgetGroups, categories, transactions, range]);
 
   const slotCount = Math.min(MAX_BUDGET_SLOTS, items.length);
   const itemKeys = useMemo(() => items.map((item) => item.key), [items]);
@@ -132,7 +218,14 @@ export default function BudgetWidget() {
           </p>
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <>
+        {range && (
+          <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+            {formatPeriodLabel(range)}
+            {monthKeysInRange(range.from, range.to).length > 1 ? " · budgets add up month by month" : ""}
+          </p>
+        )}
+        <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {layout.map((selectedKey, index) => (
             <BudgetSlot
               key={index}
@@ -143,6 +236,7 @@ export default function BudgetWidget() {
             />
           ))}
         </div>
+        </>
       )}
     </>
   );
