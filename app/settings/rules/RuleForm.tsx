@@ -41,7 +41,13 @@ export default function RuleForm({
   const [enabled, setEnabled] = useState(rule?.enabled ?? true);
   const [error, setError] = useState<string | null>(null);
 
-  const groups = useMemo(() => groupCategoriesByParent(categories), [categories]);
+  // Hidden categories aren't offered — except the one this rule already
+  // uses, so editing an existing rule never silently drops its category.
+  const pickable = useMemo(
+    () => categories.filter((c) => !c.isHidden || c.id === rule?.categoryId),
+    [categories, rule]
+  );
+  const groups = useMemo(() => groupCategoriesByParent(pickable), [pickable]);
   const regexInvalid = matchType === "regex" && pattern !== "" && !isValidRegex(pattern);
 
   // Live count of how many existing transactions this draft would match, so
