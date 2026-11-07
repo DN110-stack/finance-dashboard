@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useConfirm } from "../components/ConfirmDialog";
 import { Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
 import { BANK_BADGE_STYLES } from "../lib/banks";
@@ -14,14 +15,17 @@ function formatDate(iso: string) {
 }
 
 export default function UploadHistory() {
+  const confirm = useConfirm();
   const { batches, transactions, deleteBatch } = useTransactions();
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function handleDelete(batchId: string, bank: string, count: number) {
-    const confirmed = window.confirm(
-      `Delete this ${bank} upload and all ${count} of its transactions? This can't be undone.`
-    );
+    const confirmed = await confirm({
+      message: `Delete this ${bank} upload and all ${count} of its transactions? This can't be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     setError(null);

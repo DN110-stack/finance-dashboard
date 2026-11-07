@@ -6,6 +6,7 @@ import { BudgetsProvider } from "./context/BudgetsContext";
 import { AnnualBudgetsProvider } from "./context/AnnualBudgetsContext";
 import { GoalsProvider } from "./context/GoalsContext";
 import { BillsProvider } from "./context/BillsContext";
+import { ConfirmProvider } from "./components/ConfirmDialog";
 import { SettingsProvider } from "./context/SettingsContext";
 import "./globals.css";
 
@@ -55,7 +56,9 @@ export default function RootLayout({
               <BudgetsProvider>
                 <AnnualBudgetsProvider>
                   <GoalsProvider>
-                    <BillsProvider>{children}</BillsProvider>
+                    <BillsProvider>
+                      <ConfirmProvider>{children}</ConfirmProvider>
+                    </BillsProvider>
                   </GoalsProvider>
                 </AnnualBudgetsProvider>
               </BudgetsProvider>

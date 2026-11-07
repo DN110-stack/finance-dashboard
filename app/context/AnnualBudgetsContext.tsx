@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import { onCategoryNameReplaced, replaceCategoryName, replaceCategoryInList } from "../lib/categoryEvents";
 
 export type AnnualBudget = {
   id: string;
@@ -56,6 +57,24 @@ const AnnualBudgetsContext = createContext<AnnualBudgetsContextValue | null>(nul
 export function AnnualBudgetsProvider({ children }: { children: React.ReactNode }) {
   const [annualBudgets, setAnnualBudgets] = useState<AnnualBudget[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep in-memory budgets in step with a category rename/move that the
+  // database has already applied (see lib/categoryEvents.ts).
+  useEffect(
+    () =>
+      onCategoryNameReplaced((oldName, newName) => {
+        setAnnualBudgets((prev) =>
+          prev.map((b) => ({
+            ...b,
+            category: replaceCategoryName(b.category, oldName, newName),
+            groupCategories: b.groupCategories
+              ? replaceCategoryInList(b.groupCategories, oldName, newName)
+              : null,
+          }))
+        );
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;

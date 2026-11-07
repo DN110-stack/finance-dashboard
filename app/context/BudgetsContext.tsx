@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import { monthlyEquivalentAmount, type PeriodType } from "../lib/budgetPeriods";
+import { onCategoryNameReplaced, replaceCategoryName, replaceCategoryInList } from "../lib/categoryEvents";
 
 export type Budget = {
   id: string;
@@ -48,6 +49,21 @@ export function BudgetsProvider({ children }: { children: React.ReactNode }) {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [budgetGroups, setBudgetGroups] = useState<BudgetGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep in-memory budgets in step with a category rename/move that the
+  // database has already applied (see lib/categoryEvents.ts).
+  useEffect(
+    () =>
+      onCategoryNameReplaced((oldName, newName) => {
+        setBudgets((prev) =>
+          prev.map((b) => ({ ...b, category: replaceCategoryName(b.category, oldName, newName) }))
+        );
+        setBudgetGroups((prev) =>
+          prev.map((g) => ({ ...g, categories: replaceCategoryInList(g.categories, oldName, newName) }))
+        );
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;

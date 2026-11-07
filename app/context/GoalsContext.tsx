@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import type { Goal, GoalType } from "../lib/goals";
+import { onCategoryNameReplaced, replaceCategoryName } from "../lib/categoryEvents";
 
 export type NewGoalInput = {
   name: string;
@@ -85,6 +86,18 @@ function sortByTargetDate(goals: Goal[]) {
 export function GoalsProvider({ children }: { children: React.ReactNode }) {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep in-memory goals in step with a category rename/move that the
+  // database has already applied (see lib/categoryEvents.ts).
+  useEffect(
+    () =>
+      onCategoryNameReplaced((oldName, newName) => {
+        setGoals((prev) =>
+          prev.map((g) => ({ ...g, category: replaceCategoryName(g.category, oldName, newName) }))
+        );
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;

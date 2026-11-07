@@ -2,9 +2,30 @@
 
 import { useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
-import { useCategories, type Category } from "../context/CategoriesContext";
-import { useTransactions } from "../context/TransactionsContext";
+import {
+  totalCategoryUsage,
+  useCategories,
+  type Category,
+  type CategoryUsage,
+} from "../context/CategoriesContext";
+import { useConfirm } from "../components/ConfirmDialog";
 import { PARENT_CATEGORIES, distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
+
+const USAGE_LABELS: [keyof CategoryUsage, string, string][] = [
+  ["transactions", "transaction", "transactions"],
+  ["budgets", "budget", "budgets"],
+  ["budget_groups", "group budget", "group budgets"],
+  ["annual_budgets", "annual budget", "annual budgets"],
+  ["goals", "goal", "goals"],
+  ["bills", "bill", "bills"],
+];
+
+// "12 transactions, 1 budget, 2 bills" — only the kinds that are non-zero.
+function describeUsage(usage: CategoryUsage): string {
+  return USAGE_LABELS.filter(([key]) => usage[key] > 0)
+    .map(([key, singular, plural]) => `${usage[key]} ${usage[key] === 1 ? singular : plural}`)
+    .join(", ");
+}
 
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_PARENT_VALUE = "__new_parent__";
@@ -32,8 +53,9 @@ function resolveParentCategory(selection: string, newParentName: string): string
 }
 
 export default function CategoriesManager() {
-  const { categories, isLoading, addCategory, updateCategory, deleteCategory } = useCategories();
-  const { transactions, renameCategoryInTransactions } = useTransactions();
+  const { categories, isLoading, addCategory, updateCategory, getCategoryUsage, deleteCategory } =
+    useCategories();
+  const confirm = useConfirm();
 
   const [name, setName] = useState("");
   const [colour, setColour] = useState(DEFAULT_COLOUR);
@@ -43,6 +65,12 @@ export default function CategoriesManager() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Set while the "this category is still in use — move its records" dialog is open.
+  const [moveDialog, setMoveDialog] = useState<{
+    category: Category;
+    usage: CategoryUsage;
+    targetId: string;
+  } | null>(null);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -104,12 +132,49 @@ export default function CategoriesManager() {
   }
 
   async function handleDelete(id: string) {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+
     setError(null);
     setDeletingId(id);
     try {
+      const usage = await getCategoryUsage(id);
+
+      if (totalCategoryUsage(usage) > 0) {
+        // Still in use — never delete out from under its records. Ask where
+        // they should go instead.
+        const firstOther = categories.find((c) => c.id !== id);
+        setMoveDialog({ category, usage, targetId: firstOther?.id ?? "" });
+        return;
+      }
+
+      const confirmed = await confirm({
+        title: "Delete category?",
+        message: `Delete "${category.name}"? Nothing uses it.`,
+        confirmLabel: "Delete",
+        destructive: true,
+      });
+      if (!confirmed) return;
+
       await deleteCategory(id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete category");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleConfirmMove() {
+    if (!moveDialog || !moveDialog.targetId) return;
+
+    setError(null);
+    setDeletingId(moveDialog.category.id);
+    try {
+      await deleteCategory(moveDialog.category.id, moveDialog.targetId);
+      setMoveDialog(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete category");
+      setMoveDialog(null);
     } finally {
       setDeletingId(null);
     }
@@ -137,15 +202,21 @@ export default function CategoriesManager() {
     const nameChanged = trimmedName.toLowerCase() !== category.name.toLowerCase();
 
     if (nameChanged) {
-      const affectedCount = transactions.filter(
-        (t) => t.category.toLowerCase() === category.name.toLowerCase()
-      ).length;
-
-      if (affectedCount > 0) {
-        const confirmed = window.confirm(
-          `This will update ${affectedCount} transaction${affectedCount === 1 ? "" : "s"} using this category. Continue?`
-        );
-        if (!confirmed) return;
+      // The database rewrites every reference to the old name, so tell the
+      // user how far a rename reaches before it happens.
+      try {
+        const usage = await getCategoryUsage(category.id);
+        if (totalCategoryUsage(usage) > 0) {
+          const confirmed = await confirm({
+            title: "Rename category?",
+            message: `Renaming "${category.name}" to "${trimmedName}" will also update ${describeUsage(usage)}.`,
+            confirmLabel: "Rename",
+          });
+          if (!confirmed) return;
+        }
+      } catch (err) {
+        setEditError(err instanceof Error ? err.message : "Failed to check category usage");
+        return;
       }
     }
 
@@ -153,9 +224,6 @@ export default function CategoriesManager() {
     setEditError(null);
     try {
       await updateCategory(category.id, { name: trimmedName, colour: editColour, parentCategory });
-      if (nameChanged) {
-        await renameCategoryInTransactions(category.name, trimmedName);
-      }
       setEditingId(null);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update category");
@@ -435,6 +503,59 @@ export default function CategoriesManager() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {moveDialog && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center"
+          onClick={() => setMoveDialog(null)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-sm rounded-xl border border-black/10 bg-background p-5 shadow-xl dark:border-white/10"
+          >
+            <h2 className="text-base font-semibold">&ldquo;{moveDialog.category.name}&rdquo; is still in use</h2>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+              It&apos;s used by {describeUsage(moveDialog.usage)}. Choose a category to move them to
+              before deleting it.
+            </p>
+            <label className="mt-4 flex flex-col gap-1 text-sm font-medium">
+              Move to
+              <select
+                value={moveDialog.targetId}
+                onChange={(event) => setMoveDialog({ ...moveDialog, targetId: event.target.value })}
+                className="rounded-md border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-blue-500 dark:border-white/10"
+              >
+                {categories
+                  .filter((c) => c.id !== moveDialog.category.id)
+                  .map((c) => (
+                    <option key={c.id} value={c.id} className="text-zinc-900">
+                      {c.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setMoveDialog(null)}
+                className="min-h-[44px] flex-1 rounded-md border border-black/10 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmMove}
+                disabled={!moveDialog.targetId}
+                className="min-h-[44px] flex-1 rounded-md bg-red-600 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+              >
+                Move and delete
+              </button>
+            </div>
           </div>
         </div>
       )}

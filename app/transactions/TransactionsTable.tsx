@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useConfirm } from "../components/ConfirmDialog";
 import { useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, ListFilter, Trash2 } from "lucide-react";
 import { useTransactions } from "../context/TransactionsContext";
@@ -48,6 +49,7 @@ function SortIcon({ direction }: { direction: "asc" | "desc" }) {
 }
 
 export default function TransactionsTable() {
+  const confirm = useConfirm();
   const { transactions, isLoading, addTransactions, deleteTransactions, setTransactionOneOff } =
     useTransactions();
   const { categories, isLoading: categoriesLoading } = useCategories();
@@ -322,9 +324,11 @@ export default function TransactionsTable() {
 
   async function handleDeleteOne(transaction: Transaction) {
     if (!transaction.id) return;
-    const confirmed = window.confirm(
-      `Delete "${transaction.description}"? This can't be undone.`
-    );
+    const confirmed = await confirm({
+      message: `Delete "${transaction.description}"? This can't be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     const id = transaction.id;
@@ -372,9 +376,11 @@ export default function TransactionsTable() {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
 
-    const confirmed = window.confirm(
-      `Delete ${ids.length} selected transaction${ids.length === 1 ? "" : "s"}? This can't be undone.`
-    );
+    const confirmed = await confirm({
+      message: `Delete ${ids.length} selected transaction${ids.length === 1 ? "" : "s"}? This can't be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     setError(null);

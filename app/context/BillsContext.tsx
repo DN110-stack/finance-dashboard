@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
 import type { Bill, BillFrequency, BillPayment } from "../lib/bills";
+import { onCategoryNameReplaced, replaceCategoryName } from "../lib/categoryEvents";
 
 export type BillInput = {
   name: string;
@@ -79,6 +80,18 @@ export function BillsProvider({ children }: { children: React.ReactNode }) {
   const [bills, setBills] = useState<Bill[]>([]);
   const [payments, setPayments] = useState<BillPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep in-memory bills in step with a category rename/move that the
+  // database has already applied (see lib/categoryEvents.ts).
+  useEffect(
+    () =>
+      onCategoryNameReplaced((oldName, newName) => {
+        setBills((prev) =>
+          prev.map((b) => ({ ...b, category: replaceCategoryName(b.category, oldName, newName) }))
+        );
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;

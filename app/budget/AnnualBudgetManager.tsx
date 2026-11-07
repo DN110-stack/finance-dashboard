@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useConfirm } from "../components/ConfirmDialog";
 import { ChevronLeft, ChevronRight, CircleCheck, PiggyBank, Plus, TriangleAlert, X } from "lucide-react";
 import { useAnnualBudgets } from "../context/AnnualBudgetsContext";
 import { useCategories, type Category } from "../context/CategoriesContext";
@@ -54,6 +55,7 @@ type CardItem = {
 const CARD_STAGGER_MS = 40;
 
 export default function AnnualBudgetManager() {
+  const confirm = useConfirm();
   const {
     annualBudgets,
     isLoading: annualBudgetsLoading,
@@ -450,7 +452,11 @@ export default function AnnualBudgetManager() {
 
   async function handleDelete(item: CardItem) {
     const noun = item.kind === "group" ? "annual budget group" : "annual budget";
-    const confirmed = window.confirm(`Remove the ${noun} for ${item.name}?`);
+    const confirmed = await confirm({
+      message: `Remove the ${noun} for ${item.name}?`,
+      confirmLabel: "Remove",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     setDeletingId(item.id);

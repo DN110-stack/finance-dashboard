@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { createClient } from "../lib/supabase/client";
+import { emitCategoryNameReplaced } from "../lib/categoryEvents";
 
 export type Category = {
   id: string;
@@ -9,6 +10,20 @@ export type Category = {
   colour: string;
   parentCategory: string | null;
 };
+
+// How many records of each kind still reference a category by name.
+export type CategoryUsage = {
+  transactions: number;
+  budgets: number;
+  budget_groups: number;
+  annual_budgets: number;
+  goals: number;
+  bills: number;
+};
+
+export function totalCategoryUsage(usage: CategoryUsage): number {
+  return Object.values(usage).reduce((sum, count) => sum + count, 0);
+}
 
 type CategoryUpdates = {
   name: string;
@@ -21,7 +36,10 @@ type CategoriesContextValue = {
   isLoading: boolean;
   addCategory: (name: string, colour: string, parentCategory?: string | null) => Promise<Category>;
   updateCategory: (id: string, updates: CategoryUpdates) => Promise<Category>;
-  deleteCategory: (id: string) => Promise<void>;
+  getCategoryUsage: (id: string) => Promise<CategoryUsage>;
+  // When anything still uses the category, `moveToId` names the category
+  // that takes those records over — the database refuses the delete otherwise.
+  deleteCategory: (id: string, moveToId?: string) => Promise<void>;
 };
 
 const CategoriesContext = createContext<CategoriesContextValue | null>(null);
@@ -130,42 +148,67 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
       throw new Error(`"${trimmedName}" already exists as a category`);
     }
 
+    // One database call renames the category and rewrites every
+    // transaction, budget, goal and bill that referenced the old name, in a
+    // single transaction — so a partial failure can't leave them out of sync.
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from("categories")
-      .update({
-        name: trimmedName,
-        colour: updates.colour,
-        parent_category: updates.parentCategory,
-      })
-      .eq("id", id)
-      .select("id, name, colour, parent_category")
-      .single();
+    const { error } = await supabase.rpc("rename_category", {
+      p_id: id,
+      p_name: trimmedName,
+      p_colour: updates.colour,
+      p_parent: updates.parentCategory,
+    });
 
     if (error) throw new Error(error.message);
 
+    const previous = categories.find((c) => c.id === id);
     const category: Category = {
-      id: data.id,
-      name: data.name,
-      colour: data.colour,
-      parentCategory: data.parent_category,
+      id,
+      name: trimmedName,
+      colour: updates.colour,
+      parentCategory: updates.parentCategory,
     };
+
+    if (previous && previous.name !== trimmedName) {
+      emitCategoryNameReplaced(previous.name, trimmedName);
+    }
 
     setCategories((prev) => sortByName(prev.map((c) => (c.id === id ? category : c))));
     return category;
   }
 
-  async function deleteCategory(id: string) {
+  async function getCategoryUsage(id: string): Promise<CategoryUsage> {
     const supabase = createClient();
-    const { error } = await supabase.from("categories").delete().eq("id", id);
+    const { data, error } = await supabase.rpc("category_usage", { p_id: id });
     if (error) throw new Error(error.message);
+    return data as CategoryUsage;
+  }
+
+  async function deleteCategory(id: string, moveToId?: string) {
+    const supabase = createClient();
+    const { error } = await supabase.rpc("delete_category", {
+      p_id: id,
+      p_move_to: moveToId ?? null,
+    });
+    if (error) throw new Error(error.message);
+
+    const deleted = categories.find((c) => c.id === id);
+    const target = moveToId ? categories.find((c) => c.id === moveToId) : undefined;
+    if (deleted && target) emitCategoryNameReplaced(deleted.name, target.name);
 
     setCategories((prev) => prev.filter((category) => category.id !== id));
   }
 
   return (
     <CategoriesContext.Provider
-      value={{ categories, isLoading, addCategory, updateCategory, deleteCategory }}
+      value={{
+        categories,
+        isLoading,
+        addCategory,
+        updateCategory,
+        getCategoryUsage,
+        deleteCategory,
+      }}
     >
       {children}
     </CategoriesContext.Provider>

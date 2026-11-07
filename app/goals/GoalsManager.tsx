@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useConfirm } from "../components/ConfirmDialog";
 import { PiggyBank, Plus } from "lucide-react";
 import { useGoals } from "../context/GoalsContext";
 import type { NewGoalInput } from "../context/GoalsContext";
@@ -20,6 +21,7 @@ const CARD_STAGGER_MS = 40;
 const CONFETTI_DURATION_MS = 3500;
 
 export default function GoalsManager() {
+  const confirm = useConfirm();
   const { goals, isLoading: goalsLoading, addGoal, updateGoal, deleteGoal } = useGoals();
   const { categories, isLoading: categoriesLoading } = useCategories();
   const { transactions } = useTransactions();
@@ -124,7 +126,11 @@ export default function GoalsManager() {
   }
 
   async function handleDelete(goal: Goal) {
-    const confirmed = window.confirm(`Delete the goal "${goal.name}"?`);
+    const confirmed = await confirm({
+      message: `Delete the goal "${goal.name}"?`,
+      confirmLabel: "Delete",
+      destructive: true,
+    });
     if (!confirmed) return;
 
     setDeletingId(goal.id);

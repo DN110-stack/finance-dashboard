@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
+import { useConfirm } from "../components/ConfirmDialog";
 import { CalendarDays, Check, List, Pencil, Plus, Trash2, Undo2 } from "lucide-react";
 import { useBills, type BillInput } from "../context/BillsContext";
 import {
@@ -51,6 +52,7 @@ function offsetDate(days: number): string {
 }
 
 export default function BillsManager() {
+  const confirm = useConfirm();
   const { bills, isLoading, addBill, updateBill, setBillActive, deleteBill, markPaid, unmarkPaid } =
     useBills();
   const remindDays = useSyncExternalStore(
@@ -106,7 +108,11 @@ export default function BillsManager() {
   }
 
   async function handleDelete(bill: Bill) {
-    if (!window.confirm(`Delete "${bill.name}"? This can't be undone.`)) return;
+    if (!await confirm({
+      message: `Delete "${bill.name}"? This can't be undone.`,
+      confirmLabel: "Delete",
+      destructive: true,
+    })) return;
     await run(bill.id, () => deleteBill(bill.id));
   }
 
