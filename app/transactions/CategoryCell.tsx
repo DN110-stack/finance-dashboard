@@ -6,6 +6,7 @@ import { useCategories } from "../context/CategoriesContext";
 import { useTransactions } from "../context/TransactionsContext";
 import type { Transaction } from "../lib/csv";
 import { distinctParents, groupCategoriesByParent, UNGROUPED } from "../lib/categories";
+import { useRulePrompt } from "./useRulePrompt";
 
 const DEFAULT_COLOUR = "#3b82f6";
 const NEW_CATEGORY_VALUE = "__new__";
@@ -14,6 +15,7 @@ const NEW_PARENT_VALUE = "__new_parent__";
 export default function CategoryCell({ transaction }: { transaction: Transaction }) {
   const { categories, addCategory } = useCategories();
   const { assignCategory } = useTransactions();
+  const offerRule = useRulePrompt();
   const [isCreating, setIsCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [newColour, setNewColour] = useState(DEFAULT_COLOUR);
@@ -54,8 +56,19 @@ export default function CategoryCell({ transaction }: { transaction: Transaction
       flashSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update category");
-    } finally {
       setIsSaving(false);
+      return;
+    }
+    setIsSaving(false);
+
+    // The category change above is already saved — a rule is a separate,
+    // optional step, so a failure here is reported without undoing it.
+    try {
+      await offerRule(transaction, category);
+    } catch (err) {
+      setError(
+        `Category saved, but the rule couldn't be created: ${err instanceof Error ? err.message : "unknown error"}`
+      );
     }
   }
 

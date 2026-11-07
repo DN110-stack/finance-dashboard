@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useSettings } from "../context/SettingsContext";
 import type { DefaultBudgetView, FinancialYearPreference } from "../lib/settingsStorage";
 
@@ -82,6 +83,19 @@ export default function SettingsForm() {
 
   return (
     <div className="mt-6 flex max-w-lg flex-col gap-8">
+      <div>
+        <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Categorisation rules</h2>
+        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          Automatically file uploaded transactions into categories by what their description says.
+        </p>
+        <Link
+          href="/settings/rules"
+          className="mt-3 inline-flex min-h-[44px] items-center rounded-md border border-black/10 px-3 text-sm font-medium transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/10"
+        >
+          Manage rules
+        </Link>
+      </div>
+
       <div>
         <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Current Balance</h2>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">

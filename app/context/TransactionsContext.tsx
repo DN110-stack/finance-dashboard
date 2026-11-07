@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BankFormat, Transaction } from "../lib/csv";
 import { createClient } from "../lib/supabase/client";
 import type { Category } from "./CategoriesContext";
-import { extractKeyword, matchCategoryForDescription, UNCATEGORIZED } from "../lib/rules";
+import { createRuleMatcher, UNCATEGORIZED } from "../lib/rules";
+import { RULE_COLUMNS, ruleFromRow } from "../lib/rulesApi";
 import { onCategoryNameReplaced, replaceCategoryName } from "../lib/categoryEvents";
 
 export type UploadBatch = {
@@ -35,6 +36,7 @@ type TransactionsContextValue = {
   assignCategories: (
     assignments: { transaction: Transaction; category: Category }[]
   ) => Promise<void>;
+  applyCategoryChanges: (changes: { id: string; category: string }[]) => Promise<void>;
   deleteBatch: (batchId: string) => Promise<void>;
   deleteTransactions: (transactionIds: string[]) => Promise<void>;
   setTransactionOneOff: (transactionId: string, isOneOff: boolean) => Promise<void>;
@@ -58,7 +60,7 @@ async function fetchTransactions(supabase: SupabaseClient, userId: string) {
 
   const { data, error, status, statusText } = await supabase
     .from("transactions")
-    .select("id, date, description, category, amount, source_bank, is_one_off")
+    .select("id, date, description, category, amount, source_bank, is_one_off, category_locked")
     .eq("user_id", userId)
     .order("date", { ascending: true });
 
@@ -80,6 +82,7 @@ async function fetchTransactions(supabase: SupabaseClient, userId: string) {
     amount: Number(row.amount),
     sourceBank: row.source_bank ?? undefined,
     isOneOff: row.is_one_off ?? false,
+    categoryLocked: row.category_locked ?? false,
   }));
 }
 
@@ -212,16 +215,22 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       genuinelyNew.push(transaction);
     }
 
-    const { data: rules, error: rulesError } = await supabase
+    // The first matching enabled rule by priority wins; anything no rule
+    // matches stays Uncategorized for review.
+    const { data: ruleRows, error: rulesError } = await supabase
       .from("transaction_rules")
-      .select("keyword, categories(name)")
+      .select(RULE_COLUMNS)
       .eq("user_id", user.id);
 
     if (rulesError) throw new Error(rulesError.message);
 
+    const matcher = createRuleMatcher(
+      (ruleRows ?? []).map((row) => ruleFromRow(row as unknown as Parameters<typeof ruleFromRow>[0]))
+    );
+
     const categorized = genuinelyNew.map((transaction) => ({
       ...transaction,
-      category: matchCategoryForDescription(transaction.description, rules ?? []) ?? UNCATEGORIZED,
+      category: matcher.findRule(transaction.description, transaction.amount)?.categoryName ?? UNCATEGORIZED,
     }));
 
     const { data: batchRow, error: batchError } = await supabase
@@ -273,6 +282,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
       amount: Number(row.amount),
       sourceBank: row.source_bank ?? undefined,
       isOneOff: row.is_one_off ?? false,
+      categoryLocked: row.category_locked ?? false,
     }));
 
     setTransactions((prev) => sortByDate([...prev, ...insertedTransactions]));
@@ -297,49 +307,22 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
 
     const { error: updateError } = await supabase
       .from("transactions")
-      .update({ category: category.name })
+      .update({ category: category.name, category_locked: true })
       .eq("id", transaction.id);
 
     if (updateError) throw new Error(updateError.message);
 
-    // Upsert the rule by keyword so repeatedly re-categorizing the same
-    // merchant updates the existing rule instead of piling up duplicates.
-    const keyword = extractKeyword(transaction.description);
-    const { data: existingRules, error: findError } = await supabase
-      .from("transaction_rules")
-      .select("id")
-      .eq("user_id", user.id)
-      .ilike("keyword", keyword)
-      .limit(1);
-
-    if (findError) throw new Error(findError.message);
-
-    if (existingRules && existingRules.length > 0) {
-      const { error: updateRuleError } = await supabase
-        .from("transaction_rules")
-        .update({ category_id: category.id })
-        .eq("id", existingRules[0].id);
-
-      if (updateRuleError) throw new Error(updateRuleError.message);
-    } else {
-      const { error: insertRuleError } = await supabase.from("transaction_rules").insert({
-        user_id: user.id,
-        keyword,
-        category_id: category.id,
-      });
-
-      if (insertRuleError) throw new Error(insertRuleError.message);
-    }
-
     setTransactions((prev) =>
-      prev.map((t) => (t.id === transaction.id ? { ...t, category: category.name } : t))
+      prev.map((t) =>
+        t.id === transaction.id ? { ...t, category: category.name, categoryLocked: true } : t
+      )
     );
   }
 
   // Bulk version of assignCategory — used to accept many AI suggestions at
   // once without one round trip per transaction. Groups the work by target
-  // category/rule instead so cost scales with the number of distinct
-  // categories involved, not the number of transactions.
+  // category instead so cost scales with the number of distinct categories
+  // involved, not the number of transactions.
   async function assignCategories(
     assignments: { transaction: Transaction; category: Category }[]
   ) {
@@ -367,57 +350,10 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     for (const { name, ids } of idsByCategory.values()) {
       const { error } = await supabase
         .from("transactions")
-        .update({ category: name })
+        .update({ category: name, category_locked: true })
         .in("id", ids)
         .eq("user_id", user.id);
 
-      if (error) throw new Error(error.message);
-    }
-
-    // Upsert one rule per unique keyword — if the same keyword shows up more
-    // than once, the last assignment for it wins, matching the sequential
-    // behaviour of assignCategory being called once per transaction.
-    const categoryByKeyword = new Map<string, Category>();
-    for (const { transaction, category } of valid) {
-      categoryByKeyword.set(extractKeyword(transaction.description), category);
-    }
-
-    const { data: existingRules, error: findError } = await supabase
-      .from("transaction_rules")
-      .select("id, keyword")
-      .eq("user_id", user.id);
-
-    if (findError) throw new Error(findError.message);
-
-    const existingRuleIdByKeyword = new Map(
-      (existingRules ?? []).map((rule) => [rule.keyword.toLowerCase(), rule.id])
-    );
-
-    const ruleIdsByCategoryId = new Map<string, string[]>();
-    const rulesToInsert: { user_id: string; keyword: string; category_id: string }[] = [];
-
-    for (const [keyword, category] of categoryByKeyword.entries()) {
-      const existingRuleId = existingRuleIdByKeyword.get(keyword.toLowerCase());
-      if (existingRuleId) {
-        const ids = ruleIdsByCategoryId.get(category.id) ?? [];
-        ids.push(existingRuleId);
-        ruleIdsByCategoryId.set(category.id, ids);
-      } else {
-        rulesToInsert.push({ user_id: user.id, keyword, category_id: category.id });
-      }
-    }
-
-    for (const [categoryId, ruleIds] of ruleIdsByCategoryId.entries()) {
-      const { error } = await supabase
-        .from("transaction_rules")
-        .update({ category_id: categoryId })
-        .in("id", ruleIds);
-
-      if (error) throw new Error(error.message);
-    }
-
-    if (rulesToInsert.length > 0) {
-      const { error } = await supabase.from("transaction_rules").insert(rulesToInsert);
       if (error) throw new Error(error.message);
     }
 
@@ -426,8 +362,50 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     );
     setTransactions((prev) =>
       prev.map((t) =>
-        t.id && categoryNameById.has(t.id) ? { ...t, category: categoryNameById.get(t.id)! } : t
+        t.id && categoryNameById.has(t.id)
+          ? { ...t, category: categoryNameById.get(t.id)!, categoryLocked: true }
+          : t
       )
+    );
+  }
+
+  // Sets categories from rules in bulk. Unlike assignCategory this does NOT
+  // mark the category as set by hand, so a later rule change can still move it.
+  async function applyCategoryChanges(changes: { id: string; category: string }[]) {
+    if (changes.length === 0) return;
+
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      throw new Error("You must be logged in to categorize transactions");
+    }
+
+    const idsByCategory = new Map<string, string[]>();
+    for (const { id, category } of changes) {
+      const ids = idsByCategory.get(category) ?? [];
+      ids.push(id);
+      idsByCategory.set(category, ids);
+    }
+
+    const CHUNK_SIZE = 100;
+    for (const [category, ids] of idsByCategory.entries()) {
+      for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+        const { error } = await supabase
+          .from("transactions")
+          .update({ category })
+          .in("id", ids.slice(i, i + CHUNK_SIZE))
+          .eq("user_id", user.id);
+
+        if (error) throw new Error(error.message);
+      }
+    }
+
+    const categoryById = new Map(changes.map((c) => [c.id, c.category]));
+    setTransactions((prev) =>
+      prev.map((t) => (t.id && categoryById.has(t.id) ? { ...t, category: categoryById.get(t.id)! } : t))
     );
   }
 
@@ -529,6 +507,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         addTransactions,
         assignCategory,
         assignCategories,
+        applyCategoryChanges,
         deleteBatch,
         deleteTransactions,
         setTransactionOneOff,

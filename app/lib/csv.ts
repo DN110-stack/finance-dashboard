@@ -8,6 +8,8 @@ export type Transaction = {
   amount: number;
   sourceBank?: BankFormat;
   isOneOff?: boolean;
+  // True once the category was chosen by hand — rules never overwrite it.
+  categoryLocked?: boolean;
 };
 
 export type ParsedTransactionsCSV = {
